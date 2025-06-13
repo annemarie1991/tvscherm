@@ -56,7 +56,7 @@ if uploaded_file:
     if ponynamen_kolom is not None:
         # Zoek de rij met tijden (formaat HH:MM of HH:MM-HH:MM)
         tijdrij = None
-        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*-\s*\d{1,2}:\d{2})?\b")
+        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-–−]\s*\d{1,2}:\d{2})?\b")
         for i in range(0, 5):
             if any(tijd_pattern.search(str(cell)) for cell in df.iloc[i]):
                 tijdrij = i
@@ -84,7 +84,10 @@ if uploaded_file:
 
                 basis_tijd_clean = re.sub(r"[–−]", "-", hoofd_tijd)
                 basis_tijd_clean = re.split(r"[-\s]", basis_tijd_clean)[0].strip()
-                basis_tijd = datetime.datetime.strptime(basis_tijd_clean, "%H:%M")
+                try:
+                    basis_tijd = datetime.datetime.strptime(basis_tijd_clean, "%H:%M")
+                except ValueError:
+                    continue
 
                 gekoppelde_tijden = []
                 gekoppelde_kolommen = []
@@ -92,12 +95,15 @@ if uploaded_file:
                 for andere_tijd, andere_kol in tijd_lijst:
                     tijd_clean = re.sub(r"[–−]", "-", andere_tijd)
                     tijd_clean = re.split(r"[-\s]", tijd_clean)[0].strip()
-                    test_tijd = datetime.datetime.strptime(tijd_clean, "%H:%M")
-                    verschil = (test_tijd - basis_tijd).total_seconds() / 60
-                    if 0 <= verschil <= 30:
-                        gekoppelde_tijden.append(andere_tijd)
-                        gekoppelde_kolommen.append((andere_tijd, andere_kol))
-                        gebruikte_tijden.add(andere_tijd)
+                    try:
+                        test_tijd = datetime.datetime.strptime(tijd_clean, "%H:%M")
+                        verschil = (test_tijd - basis_tijd).total_seconds() / 60
+                        if 0 <= verschil <= 30:
+                            gekoppelde_tijden.append(andere_tijd)
+                            gekoppelde_kolommen.append((andere_tijd, andere_kol))
+                            gebruikte_tijden.add(andere_tijd)
+                    except ValueError:
+                        continue
 
                 columns = st.columns(len(gekoppelde_kolommen))
                 for (tijd, kolset), col_container in zip(gekoppelde_kolommen, columns):
