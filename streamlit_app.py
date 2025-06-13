@@ -29,7 +29,7 @@ if "ondertekst" not in st.session_state:
         st.session_state.vet = False
         st.session_state.geel = False
 
-st.sidebar.header("📝 Ondertekst instellen")
+st.sidebar.header("📜 Ondertekst instellen")
 nieuwe_tekst = st.sidebar.text_area("Tekst onderaan elke sectie", st.session_state.ondertekst or "")
 vet = st.sidebar.checkbox("Dikgedrukt", value=st.session_state.vet)
 geel = st.sidebar.checkbox("Geel markeren", value=st.session_state.geel)
@@ -39,9 +39,6 @@ if st.sidebar.button("📂 Opslaan"):
     st.session_state.geel = geel
     tekstpad.write_text(f"{nieuwe_tekst}\n{vet}\n{geel}", encoding="utf-8")
     st.sidebar.success("Tekst opgeslagen!")
-
-if st.button("📤 Upload naar (online) scherm"):
-    upload_to_slides()
 
 st.markdown("Upload hieronder het Excel-bestand met de planning. Kies daarna het juiste tabblad.")
 
@@ -72,7 +69,7 @@ if uploaded_file:
             break
 
     if ponynamen_kolom is not None:
-        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-–−]\s*\d{1,2}:\d{2})?\b")
+        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-\u2013−]\s*\d{1,2}:\d{2})?\b")
         tijdrij = next((i for i in range(0, 5) if any(tijd_pattern.search(str(cell)) for cell in df.iloc[i])), None)
 
         if tijdrij is not None:
@@ -169,6 +166,9 @@ if uploaded_file:
 
             st.session_state["slides_data"] = slides_data
             st.success("Planning is verwerkt. Je kunt nu uploaden.")
+
+            if st.button("📄 Upload naar (online) scherm"):
+                upload_to_slides()
 
             st.markdown("### 📋 Voorbeeld weergave van slides")
             for idx, blok in enumerate(slides_data):
