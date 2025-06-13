@@ -9,21 +9,6 @@ from pathlib import Path
 SCOPES = ['https://www.googleapis.com/auth/presentations']
 PRESENTATION_ID = '1vuVUa8oVsXYNoESTGdZH0NYqJJnNF_HgguSsdAGOkk4'
 
-# ✅ CONTROLEER OF pony_opmerkingen.json GELDIG IS
-try:
-    path = Path("pony_opmerkingen.json")
-    if not path.exists():
-        path.write_text("{}", encoding="utf-8")
-        st.warning("pony_opmerkingen.json is aangemaakt omdat hij ontbrak.")
-    else:
-        with path.open("r", encoding="utf-8") as f:
-            json.load(f)  # Probeer te laden
-except Exception as e:
-    path.write_text("{}", encoding="utf-8")  # Corrupte inhoud overschrijven
-    st.warning(f"pony_opmerkingen.json is hersteld. Oorzaak: {e}")
-
-# Rest van je functies en code blijft ongewijzigd
-
 def parse_markdown_to_text_elements(text):
     elements = []
     bold = False
@@ -93,11 +78,13 @@ def upload_to_slides():
             requests.append({
                 "duplicateObject": {
                     "objectId": base_slide_id,
-                    "objectIds": {base_slide_id: slide_id}
+                    "objectIds": {
+                        base_slide_id: slide_id
+                    }
                 }
             })
 
-            # ✅ Datum bovenaan gecentreerd en vet
+            # ✅ Datum bovenaan gecentreerd en dikgedrukt
             datum_id = f"datum_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "createShape": {
@@ -106,10 +93,10 @@ def upload_to_slides():
                     "elementProperties": {
                         "pageObjectId": slide_id,
                         "size": {"height": {"magnitude": 30, "unit": "PT"},
-                                 "width": {"magnitude": 600, "unit": "PT"}},
+                                 "width": {"magnitude": 300, "unit": "PT"}},
                         "transform": {
                             "scaleX": 1, "scaleY": 1,
-                            "translateX": 50, "translateY": 5,
+                            "translateX": 150, "translateY": 5,
                             "unit": "PT"
                         }
                     }
@@ -149,8 +136,7 @@ def upload_to_slides():
 
                 content = f"**{col['tijd']}**\n**Juf: {col['juf']}**\n\n"
                 for kind, pony in col["kinderen"]:
-                    opm = pony_opmerking(pony)
-                    content += f"{kind} – {pony}{opm}\n"
+                    content += f"{kind} – {pony}\n"
 
                 textbox_id = f"textbox_{uuid.uuid4().hex[:8]}"
                 requests.append({
@@ -194,7 +180,7 @@ def upload_to_slides():
                         })
                     index_start += length
 
-            # ✅ Ondertekst onderaan gecentreerd
+            # ✅ Ondertekst gecentreerd
             if blok.get("ondertekst"):
                 onder_id = f"onder_{uuid.uuid4().hex[:8]}"
                 requests.append({
