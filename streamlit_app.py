@@ -64,7 +64,7 @@ if uploaded_file:
                 if tijd_pattern.match(cel):
                     tijd_dict[col] = cel.strip()
 
-            # ⬇️ Fix toegepast voor tijdsortering
+            # Tijdsortering
             tijd_items = sorted(
                 tijd_dict.items(),
                 key=lambda x: datetime.datetime.strptime(
@@ -99,7 +99,7 @@ if uploaded_file:
 
             # Toon groepen per tijdsblok
             st.markdown("### 📅 Planning per groep")
-            datum_vandaag = datetime.datetime.today().strftime("%A %d-%m-%Y")
+            datum_vandaag = datetime.datetime.today().strftime("%d-%m-%Y")  # ✅ Alleen de datum
             st.markdown(f"**Datum:** {datum_vandaag}")
 
             # Zoek "eigen pony" rij
@@ -109,6 +109,8 @@ if uploaded_file:
                 if "eigen pony" in waarde:
                     eigen_pony_rij = r
                     break
+
+            reeds_in_bak = set()  # ✅ Houdt bij welke pony’s al gebruikt zijn
 
             for blok in groepen_per_blok:
                 st.markdown("---")
@@ -142,7 +144,10 @@ if uploaded_file:
                         if key in namen_counter:
                             code += achternaam[:1].upper()
                         namen_counter[key] = namen_counter.get(key, 0) + 1
-                        kind_pony_combinaties.append((code, pony.title()))
+
+                        locatie = "(B)" if pony in reeds_in_bak else "(S)"  # ✅ Nieuw: locatie
+                        kind_pony_combinaties.append((code, f"{pony.title()} {locatie}"))
+                        reeds_in_bak.add(pony)
 
                     kind_pony_combinaties.sort(key=lambda x: x[0].lower())
 
