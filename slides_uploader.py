@@ -179,7 +179,7 @@ def upload_to_slides():
                             },
                             "transform": {
                                 "scaleX": 1, "scaleY": 1,
-                                "translateX": 50, "translateY": 380,
+                                "translateX": 50, "translateY": 340,
                                 "unit": "PT"
                             }
                         }
