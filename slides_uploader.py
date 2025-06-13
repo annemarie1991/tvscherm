@@ -5,6 +5,8 @@ import streamlit as st
 import re
 import json
 from pathlib import Path
+from datetime import datetime
+import pytz
 
 SCOPES = ['https://www.googleapis.com/auth/presentations']
 PRESENTATION_ID = '1vuVUa8oVsXYNoESTGdZH0NYqJJnNF_HgguSsdAGOkk4'
@@ -49,7 +51,31 @@ def pony_opmerking(pony_naam: str) -> str:
         pass
     return ""
 
+def is_22_uur_geweest():
+    now = datetime.now(pytz.timezone("Europe/Amsterdam"))
+    return now.hour >= 22
+
 def upload_to_slides():
+    if is_22_uur_geweest():
+        try:
+            credentials = service_account.Credentials.from_service_account_info(
+                st.secrets["google_service_account"], scopes=SCOPES
+            )
+            service = build('slides', 'v1', credentials=credentials)
+            presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
+            base_slide_id = presentation.get('slides', [])[0].get('objectId')
+            slide_ids = [slide['objectId'] for slide in presentation.get('slides', [])[1:]]
+            delete_requests = [{"deleteObject": {"objectId": slide_id}} for slide_id in slide_ids]
+            if delete_requests:
+                service.presentations().batchUpdate(
+                    presentationId=PRESENTATION_ID,
+                    body={"requests": delete_requests}
+                ).execute()
+            return
+        except Exception as e:
+            st.error(f"Fout bij automatische opschoning: {e}")
+            return
+
     if "slides_data" not in st.session_state or not st.session_state["slides_data"]:
         st.error("Geen slides om te uploaden.")
         return
@@ -59,9 +85,8 @@ def upload_to_slides():
             st.secrets["google_service_account"], scopes=SCOPES
         )
         service = build('slides', 'v1', credentials=credentials)
-
         presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
-        base_slide_id = presentation.get('slides', [])[0].get('objectId')  # ← eerste slide als sjabloon
+        base_slide_id = presentation.get('slides', [])[0].get('objectId')
         slide_ids = [slide['objectId'] for slide in presentation.get('slides', [])[1:]]
         delete_requests = [{"deleteObject": {"objectId": slide_id}} for slide_id in slide_ids]
 
@@ -78,9 +103,48 @@ def upload_to_slides():
             requests.append({
                 "duplicateObject": {
                     "objectId": base_slide_id,
-                    "objectIds": {
-                        base_slide_id: slide_id
+                    "objectIds": {base_slide_id: slide_id}
+                }
+            })
+
+            datum_id = f"datum_{uuid.uuid4().hex[:8]}"
+            requests.append({
+                "createShape": {
+                    "objectId": datum_id,
+                    "shapeType": "TEXT_BOX",
+                    "elementProperties": {
+                        "pageObjectId": slide_id,
+                        "size": {"height": {"magnitude": 30, "unit": "PT"},
+                                 "width": {"magnitude": 600, "unit": "PT"}},
+                        "transform": {
+                            "scaleX": 1, "scaleY": 1,
+                            "translateX": 50, "translateY": 5,
+                            "unit": "PT"
+                        }
                     }
+                }
+            })
+            requests.append({
+                "insertText": {
+                    "objectId": datum_id,
+                    "insertionIndex": 0,
+                    "text": blok["title"].replace("Planning ", "")
+                }
+            })
+            requests.append({
+                "updateTextStyle": {
+                    "objectId": datum_id,
+                    "textRange": {"type": "ALL"},
+                    "style": {"fontSize": {"magnitude": 14, "unit": "PT"}, "bold": True},
+                    "fields": "fontSize,bold"
+                }
+            })
+            requests.append({
+                "updateParagraphStyle": {
+                    "objectId": datum_id,
+                    "textRange": {"type": "ALL"},
+                    "style": {"alignment": "CENTER"},
+                    "fields": "alignment"
                 }
             })
 
@@ -91,7 +155,6 @@ def upload_to_slides():
             for i, col in enumerate(blok["columns"]):
                 box_x = x_offset + i * (column_width + 40)
                 box_y = y_offset
-
                 content = f"**{col['tijd']}**\n**Juf: {col['juf']}**\n\n"
                 for kind, pony in col["kinderen"]:
                     opm = pony_opmerking(pony)
@@ -139,7 +202,6 @@ def upload_to_slides():
                         })
                     index_start += length
 
-            # Ondertekst
             if blok.get("ondertekst"):
                 onder_id = f"onder_{uuid.uuid4().hex[:8]}"
                 requests.append({
@@ -183,6 +245,15 @@ def upload_to_slides():
                             "fields": ",".join(style.keys())
                         }
                     })
+
+                requests.append({
+                    "updateParagraphStyle": {
+                        "objectId": onder_id,
+                        "textRange": {"type": "ALL"},
+                        "style": {"alignment": "CENTER"},
+                        "fields": "alignment"
+                    }
+                })
 
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
