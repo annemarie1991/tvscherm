@@ -1,11 +1,11 @@
+# Nieuwe versie van streamlit_app.py
 import streamlit as st
 import pandas as pd
 import datetime
 import re
 import locale
 from pathlib import Path
-import os
-from slides_uploader import upload_to_slides
+from slides_uploader import upload_to_slides  # dit bestand moet je ook zo aanpassen
 
 # Nederlandse datuminstelling
 try:
@@ -17,7 +17,7 @@ except:
         pass
 
 st.set_page_config(page_title="Het Zesspan TV Scherm", layout="wide")
-st.title("🏄 Het Zesspan TV Scherm")
+st.title("\U0001F3C4 Het Zesspan TV Scherm")
 
 tekstpad = Path("ondertekst.txt")
 
@@ -34,11 +34,11 @@ if "ondertekst" not in st.session_state:
         st.session_state.geel = False
 
 # Sidebar instellingen
-st.sidebar.header("📝 Ondertekst instellen")
+st.sidebar.header("\U0001F4DD Ondertekst instellen")
 nieuwe_tekst = st.sidebar.text_area("Tekst onderaan elke sectie", st.session_state.ondertekst or "")
 vet = st.sidebar.checkbox("Dikgedrukt", value=st.session_state.vet)
 geel = st.sidebar.checkbox("Geel markeren", value=st.session_state.geel)
-if st.sidebar.button("📂 Opslaan"):
+if st.sidebar.button("\U0001F4C2 Opslaan"):
     st.session_state.ondertekst = nieuwe_tekst
     st.session_state.vet = vet
     st.session_state.geel = geel
@@ -46,7 +46,7 @@ if st.sidebar.button("📂 Opslaan"):
     st.sidebar.success("Tekst opgeslagen!")
 
 # Upload knop
-if st.button("📤 Upload naar (online) scherm"):
+if st.button("\U0001F4E4 Upload naar (online) scherm"):
     upload_to_slides()
 
 st.markdown("""
@@ -54,11 +54,11 @@ Upload hieronder het Excel-bestand met de planning. Kies daarna het juiste tabbl
 De app herkent automatisch de ponynamen, lestijden, kindernamen (geanonimiseerd) en juffen.
 """)
 
-uploaded_file = st.file_uploader("📄 Upload je Excel-bestand", type=["xlsx"])
+uploaded_file = st.file_uploader("\U0001F4C4 Upload je Excel-bestand", type=["xlsx"])
 
 if uploaded_file:
     xls = pd.ExcelFile(uploaded_file)
-    sheet = st.selectbox("📜 Kies een tabblad", xls.sheet_names)
+    sheet = st.selectbox("\U0001F4DC Kies een tabblad", xls.sheet_names)
     df = pd.read_excel(xls, sheet_name=sheet, header=None)
     st.dataframe(df.head(20))
 
@@ -81,7 +81,7 @@ if uploaded_file:
             break
 
     if ponynamen_kolom is not None:
-        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-\u2013\u2212]\s*\d{1,2}:\d{2})?\b")
+        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-–−]\s*\d{1,2}:\d{2})?\b")
         tijdrij = next((i for i in range(0, 5) if any(tijd_pattern.search(str(cell)) for cell in df.iloc[i])), None)
 
         if tijdrij is not None:
@@ -127,10 +127,10 @@ if uploaded_file:
             slides_data = []
 
             for blok in groepen_per_blok:
-                groepen = []
-                for i, (col, tijd) in enumerate(blok):
+                blok_kolommen = []
+                for col, tijd in blok:
                     max_rij = eigen_pony_rij if eigen_pony_rij else len(df)
-                    juf = str(df.iloc[eigen_pony_rij + 2, col]).strip().title() if eigen_pony_rij and pd.notna(df.iloc[eigen_pony_rij + 2, col]) else "onbekend"
+                    juf = str(df.iloc[eigen_pony_rij + 2, col]).strip().title() if eigen_pony_rij and pd.notna(df.iloc[eigen_pony_rij + 2, col]) else "Onbekend"
 
                     kind_pony_combinaties = []
                     namen_counter = {}
@@ -160,41 +160,25 @@ if uploaded_file:
                         reeds_in_bak.add(pony)
 
                     kind_pony_combinaties.sort(key=lambda x: x[0].lower())
-                    groepen.append({
+
+                    blok_kolommen.append({
                         "tijd": tijd,
                         "juf": juf,
                         "kinderen": kind_pony_combinaties
                     })
 
-                # splitsen in slides van maximaal 3 groepen per slide
-                for i in range(0, len(groepen), 3):
-                    deel = groepen[i:i+3]
-                    groep_tekst = ""
-                    for groep in deel:
-                        groep_tekst += f"Groep {groep['tijd']} – Juf: {groep['juf']}\n"
-                        for naam, pony in groep['kinderen']:
-                            groep_tekst += f"- {naam} – {pony}\n"
-                        groep_tekst += "\n"
-
-                    onder = st.session_state.ondertekst.strip()
-                    if onder:
-                        if st.session_state.geel:
-                            onder = f"[GEEL]{onder}[/GEEL]"
-                        if st.session_state.vet:
-                            onder = f"**{onder}**"
-                        groep_tekst += f"{onder}\n"
-
+                # splitsen als meer dan 3 kolommen
+                for i in range(0, len(blok_kolommen), 3):
                     slides_data.append({
                         "title": f"Planning {datum_vandaag}",
-                        "content": groep_tekst.strip()
+                        "columns": blok_kolommen[i:i+3],
+                        "ondertekst": st.session_state.ondertekst.strip(),
+                        "vet": st.session_state.vet,
+                        "geel": st.session_state.geel
                     })
 
             st.session_state["slides_data"] = slides_data
-
-            st.subheader("✅ Controle: slides_data inhoud")
-            for i, blok in enumerate(slides_data, start=1):
-                st.markdown(f"**Slide {i}**")
-                st.text(f"Titel: {blok['title']}\nInhoud:\n{blok['content']}")
+            st.success("Planning is verwerkt. Je kunt nu uploaden.")
 
         else:
             st.warning("Kon geen rij met lestijden vinden.")
