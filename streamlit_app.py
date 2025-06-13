@@ -93,4 +93,83 @@ if uploaded_file:
                     continue
 
                 gekoppelde_kolommen = []
-                j =
+                j = i
+                while j < len(tijd_lijst):
+                    tijd, kolset = tijd_lijst[j]
+                    tijd_clean = re.sub(r"[–−]", "-", tijd)
+                    tijd_clean = re.split(r"[-\s]", tijd_clean)[0].strip()
+                    try:
+                        test_tijd = datetime.datetime.strptime(tijd_clean, "%H:%M")
+                        verschil = (test_tijd - basis_tijd).total_seconds() / 60
+                        if 0 <= verschil <= 30:
+                            gekoppelde_kolommen.append((tijd, kolset))
+                            gebruikte_tijden.add(tijd)
+                            j += 1
+                        else:
+                            break
+                    except ValueError:
+                        break
+
+                # Nu renderen we deze set van groepen naast elkaar
+                columns = st.columns(len(gekoppelde_kolommen))
+                for (tijd, kolset), col_container in zip(gekoppelde_kolommen, columns):
+                    kind_pony_combinaties = []
+                    juf = "onbekend"
+                    max_rij = len(df)
+                    eigen_pony_rij = None
+
+                    for r in range(ponynamen_start_index, len(df)):
+                        waarde = str(df.iloc[r, ponynamen_kolom]).strip().lower()
+                        if "eigen pony" in waarde:
+                            eigen_pony_rij = r
+                            max_rij = r
+                            break
+
+                    if eigen_pony_rij is not None and eigen_pony_rij + 2 < len(df):
+                        for col in kolset:
+                            mogelijke_juf = str(df.iloc[eigen_pony_rij + 2, col]).strip()
+                            if mogelijke_juf and mogelijke_juf.lower() != "nan":
+                                juf = mogelijke_juf.title()
+                                break
+
+                    namen_counter = {}
+
+                    for col in kolset:
+                        for r in range(ponynamen_start_index, max_rij):
+                            ponycel = str(df.iloc[r, ponynamen_kolom]) if r < len(df) else ""
+                            naam = str(df.iloc[r, col]) if col in df.columns and r < len(df) else ""
+
+                            if not naam or naam.strip().lower() in ["", "nan", "x"]:
+                                continue
+
+                            pony = ponycel.strip().title()
+                            delen = naam.strip().split()
+                            voornaam = delen[0].capitalize() if delen else ""
+                            achternaam = ""
+                            tussenvoegsels = {"van", "de", "der", "den", "ter", "ten", "het", "te"}
+                            for deel in delen[1:]:
+                                if deel.lower() not in tussenvoegsels:
+                                    achternaam = deel.capitalize()
+                                    break
+                            code = voornaam
+                            key = voornaam.lower()
+                            if key in namen_counter:
+                                code += achternaam[:1].upper()
+                            namen_counter[key] = namen_counter.get(key, 0) + 1
+                            kind_pony_combinaties.append((code, pony))
+
+                    kind_pony_combinaties.sort(key=lambda x: x[0].lower())
+
+                    with col_container:
+                        st.markdown(f"<strong>Groep {tijd}</strong>", unsafe_allow_html=True)
+                        st.markdown(f"<strong>Juf:</strong> {juf}", unsafe_allow_html=True)
+                        for naam, pony in kind_pony_combinaties:
+                            st.markdown(f"- {naam} – {pony}")
+
+                i = j
+        else:
+            st.warning("Kon geen rij met lestijden vinden.")
+    else:
+        st.warning("Kon geen kolom met >60 ponynamen vinden.")
+else:
+    st.info("Upload eerst een Excel-bestand om verder te gaan.")
