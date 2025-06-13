@@ -39,8 +39,6 @@ if uploaded_file:
             break
 
     if ponynamen_kolom is not None:
-        ponynamen = df[ponynamen_kolom].dropna().astype(str).tolist()
-
         # Zoek de rij met tijden (formaat HH:MM of HH:MM-HH:MM)
         tijdrij = None
         tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*-\s*\d{1,2}:\d{2})?\b")
@@ -65,15 +63,14 @@ if uploaded_file:
             for tijd, col in zip(tijden, kolommen):
                 kind_pony_combinaties = []
                 juf = None
-                for i, pony in enumerate(ponynamen):
-                    if i >= len(df):
-                        continue
-                    naam = str(df.iloc[i, col])
+                for i in range(len(df)):
+                    naam = str(df.iloc[i, col]) if col in df.columns and i < len(df) else ""
                     if not naam or naam.strip() == "" or naam.strip().lower() == "nan" or naam.strip().lower() == "x":
                         continue
                     if "juf" in naam.lower():
                         juf = naam
                         continue
+                    pony = str(df.iloc[i, ponynamen_kolom]) if ponynamen_kolom in df.columns and i < len(df) else ""
                     delen = naam.strip().split()
                     voornaam = delen[0] if delen else ""
                     achternaam = ""
