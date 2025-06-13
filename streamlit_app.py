@@ -7,6 +7,8 @@ from pathlib import Path
 from slides_uploader import upload_to_slides
 import json
 
+st.set_page_config(page_title="Het Zesspan TV Scherm", layout="wide")  # ← Moet als eerste st.-commando
+
 # 👉 Pony-opmerkingen initialiseren
 pony_opmerkingen_pad = Path("pony_opmerkingen.json")
 if "pony_opmerkingen" not in st.session_state:
@@ -42,7 +44,6 @@ except:
     except:
         pass
 
-st.set_page_config(page_title="Het Zesspan TV Scherm", layout="wide")
 st.title("🏄 Het Zesspan TV Scherm")
 
 tekstpad = Path("ondertekst.txt")
