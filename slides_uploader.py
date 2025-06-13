@@ -6,49 +6,8 @@ from googleapiclient.errors import HttpError
 # ID van je bestaande presentatie
 PRESENTATION_ID = "1vuVUa8oVsXYNoESTGdZH0NYqJJnNF_HgguSsdAGOkk4"
 
-def parse_text_with_style(text):
-    """
-    Converteer eenvoudige markdownstijl (**vet** en [GEEL]) naar text elements voor Google Slides.
-    """
-    elements = []
-    bold = False
-    yellow = False
-    buffer = ""
+MAX_KOLOMMEN_PER_SLIDE = 4
 
-    def flush():
-        nonlocal buffer, bold, yellow
-        if buffer:
-            style = {"fontSize": {"magnitude": 16, "unit": "PT"}}
-            if bold:
-                style["bold"] = True
-            if yellow:
-                style["foregroundColor"] = {
-                    "opaqueColor": {
-                        "rgbColor": {"red": 1, "green": 0.8, "blue": 0}
-                    }
-                }
-            elements.append({"textRun": {"content": buffer, "style": style}})
-            buffer = ""
-
-    i = 0
-    while i < len(text):
-        if text[i:i+2] == "**":
-            flush()
-            bold = not bold
-            i += 2
-        elif text[i:i+6] == "[GEEL]":
-            flush()
-            yellow = True
-            i += 6
-        elif text[i:i+7] == "[/GEEL]":
-            flush()
-            yellow = False
-            i += 7
-        else:
-            buffer += text[i]
-            i += 1
-    flush()
-    return elements
 
 def upload_to_slides():
     try:
@@ -71,103 +30,128 @@ def upload_to_slides():
                 body={"requests": delete_requests}
             ).execute()
 
-        for i, blok in enumerate(st.session_state.get("slides_data", []), start=1):
-            slide_id = f"slide_{i}"
-            title_id = f"title_{i}"
-            content_id = f"content_{i}"
-
+        # Genereer slides op basis van blokken, maximaal 4 per slide
+        slides_data = st.session_state.get("slides_data", [])
+        for page_index in range(0, len(slides_data), MAX_KOLOMMEN_PER_SLIDE):
+            subset = slides_data[page_index:page_index + MAX_KOLOMMEN_PER_SLIDE]
+            slide_id = f"slide_{page_index}"
             requests = [
                 {
                     "createSlide": {
                         "objectId": slide_id,
-                        "insertionIndex": i,
+                        "insertionIndex": page_index,
                         "slideLayoutReference": {"predefinedLayout": "BLANK"}
                     }
-                },
-                {
+                }
+            ]
+
+            # Titel (datum) gecentreerd bovenaan
+            title_id = f"title_{page_index}"
+            requests.append({
+                "createShape": {
+                    "objectId": title_id,
+                    "shapeType": "TEXT_BOX",
+                    "elementProperties": {
+                        "pageObjectId": slide_id,
+                        "size": {"height": {"magnitude": 50, "unit": "PT"}, "width": {"magnitude": 500, "unit": "PT"}},
+                        "transform": {
+                            "scaleX": 1, "scaleY": 1,
+                            "translateX": 100, "translateY": 20,
+                            "unit": "PT"
+                        }
+                    }
+                }
+            })
+            requests.append({
+                "insertText": {
+                    "objectId": title_id,
+                    "insertionIndex": 0,
+                    "text": subset[0]["title"]
+                }
+            })
+            requests.append({
+                "updateTextStyle": {
+                    "objectId": title_id,
+                    "textRange": {"type": "ALL"},
+                    "style": {"bold": True, "fontSize": {"magnitude": 24, "unit": "PT"}},
+                    "fields": "bold,fontSize"
+                }
+            })
+
+            # Kolommen
+            kolombreedte = 150
+            spacing = 20
+            start_x = 50
+            for i, blok in enumerate(subset):
+                content_id = f"content_{page_index}_{i}"
+                x = start_x + i * (kolombreedte + spacing)
+                requests.append({
                     "createShape": {
-                        "objectId": title_id,
+                        "objectId": content_id,
                         "shapeType": "TEXT_BOX",
                         "elementProperties": {
                             "pageObjectId": slide_id,
-                            "size": {"height": {"magnitude": 100, "unit": "PT"}, "width": {"magnitude": 500, "unit": "PT"}},
+                            "size": {"height": {"magnitude": 400, "unit": "PT"}, "width": {"magnitude": kolombreedte, "unit": "PT"}},
                             "transform": {
                                 "scaleX": 1, "scaleY": 1,
-                                "translateX": 50, "translateY": 20,
+                                "translateX": x, "translateY": 100,
                                 "unit": "PT"
                             }
                         }
                     }
-                },
-                {
-                    "insertText": {
-                        "objectId": title_id,
-                        "insertionIndex": 0,
-                        "text": blok["title"]
-                    }
-                },
-                {
-                    "createShape": {
-                        "objectId": content_id,
-                        "shapeType": "TEXT_BOX",
-                        "elementProperties": {
-                            "pageObjectId": slide_id,
-                            "size": {"height": {"magnitude": 400, "unit": "PT"}, "width": {"magnitude": 600, "unit": "PT"}},
-                            "transform": {
-                                "scaleX": 1, "scaleY": 1,
-                                "translateX": 50, "translateY": 130,
-                                "unit": "PT"
-                            }
-                        }
-                    }
-                },
-                {
-                    "insertText": {
-                        "objectId": content_id,
-                        "insertionIndex": 0,
-                        "text": " "  # placeholder zodat styles kunnen worden toegepast
-                    }
-                },
-                {
-                    "updateTextStyle": {
-                        "objectId": content_id,
-                        "style": {"fontSize": {"magnitude": 16, "unit": "PT"}},
-                        "textRange": {"type": "ALL"},
-                        "fields": "fontSize"
-                    }
-                },
-                {
+                })
+                requests.append({
                     "insertText": {
                         "objectId": content_id,
                         "insertionIndex": 0,
                         "text": blok["content"]
                     }
-                }
-            ]
+                })
 
-            # Meer geavanceerde opmaak: splits tekst in runs met stijlen
-            text_elements = parse_text_with_style(blok["content"])
-            if text_elements:
+            # Ondertekst
+            onder = st.session_state.get("ondertekst", "")
+            if onder:
+                ondertekst_id = f"onder_{page_index}"
                 requests.append({
-                    "deleteText": {
-                        "objectId": content_id,
-                        "textRange": {"type": "ALL"}
+                    "createShape": {
+                        "objectId": ondertekst_id,
+                        "shapeType": "TEXT_BOX",
+                        "elementProperties": {
+                            "pageObjectId": slide_id,
+                            "size": {"height": {"magnitude": 50, "unit": "PT"}, "width": {"magnitude": 600, "unit": "PT"}},
+                            "transform": {
+                                "scaleX": 1, "scaleY": 1,
+                                "translateX": 50, "translateY": 520,
+                                "unit": "PT"
+                            }
+                        }
                     }
                 })
                 requests.append({
                     "insertText": {
-                        "objectId": content_id,
+                        "objectId": ondertekst_id,
                         "insertionIndex": 0,
-                        "text": ""
+                        "text": onder
                     }
                 })
-                requests.append({
-                    "insertText": {
-                        "objectId": content_id,
-                        "insertionIndex": 0,
-                        "text": "\n".join([e["textRun"]["content"] for e in text_elements])
+                stijl = {}
+                if st.session_state.get("vet"):
+                    stijl["bold"] = True
+                if st.session_state.get("geel"):
+                    stijl["foregroundColor"] = {
+                        "opaqueColor": {
+                            "rgbColor": {"red": 1, "green": 0.8, "blue": 0}
+                        }
                     }
-                })
+                if stijl:
+                    requests.append({
+                        "updateTextStyle": {
+                            "objectId": ondertekst_id,
+                            "textRange": {"type": "ALL"},
+                            "style": stijl,
+                            "fields": ",".join(stijl.keys())
+                        }
+                    })
 
             service.presentations().batchUpdate(
                 presentationId=PRESENTATION_ID,
