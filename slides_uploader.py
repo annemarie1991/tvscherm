@@ -56,7 +56,7 @@ def upload_to_slides():
 
     try:
         credentials = service_account.Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"], scopes=SCOPES
+            st.secrets["google_service_account"], scopes=SCOPES
         )
         service = build('slides', 'v1', credentials=credentials)
 
@@ -184,7 +184,7 @@ def upload_to_slides():
                                      "width": {"magnitude": 600, "unit": "PT"}},
                             "transform": {
                                 "scaleX": 1, "scaleY": 1,
-                                "translateX": 50, "translateY": 370,
+                                "translateX": 50, "translateY": 350,
                                 "unit": "PT"
                             }
                         }
