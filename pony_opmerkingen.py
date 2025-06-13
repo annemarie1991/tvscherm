@@ -3,25 +3,52 @@ import json
 from pathlib import Path
 
 st.set_page_config(page_title="Pony-opmerkingen", layout="wide")
-st.title("🐴 Pony-opmerkingen beheren")
 
-json_pad = Path("pony_opmerkingen.json")
+OPMERKINGEN_PATH = Path("pony_opmerkingen.json")
 
-if not json_pad.exists():
-    json_pad.write_text("{}", encoding="utf-8")
+def load_opmerkingen():
+    if OPMERKINGEN_PATH.exists():
+        with open(OPMERKINGEN_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
 
-with json_pad.open("r", encoding="utf-8") as f:
-    opmerkingen = json.load(f)
+def save_opmerkingen(data):
+    with open(OPMERKINGEN_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
 
-ponynaam = st.text_input("Pony (bijv. Parel of pare)")
-opmerking = st.text_input("Opmerking voor deze pony")
+st.title("📝 Pony-opmerkingen beheren")
 
-if st.button("➕ Opslaan of bijwerken"):
-    opmerkingen[ponynaam.strip()] = opmerking.strip()
-    with json_pad.open("w", encoding="utf-8") as f:
-        json.dump(opmerkingen, f, ensure_ascii=False, indent=2)
-    st.success("Opmerking opgeslagen!")
+opmerkingen = load_opmerkingen()
 
-st.markdown("### 📋 Bestaande opmerkingen")
-for pony, tekst in sorted(opmerkingen.items()):
-    st.markdown(f"**{pony}**: {tekst}")
+# Nieuwe opmerking toevoegen
+with st.form("toevoegen", clear_on_submit=True):
+    pony = st.text_input("Pony-naam (of deel ervan)").strip()
+    opmerking = st.text_input("Opmerking of eigenschap").strip()
+    toevoegen = st.form_submit_button("Toevoegen")
+
+    if toevoegen:
+        if pony and opmerking:
+            opmerkingen[pony] = opmerking
+            save_opmerkingen(opmerkingen)
+            st.success(f"Opmerking toegevoegd voor '{pony}'")
+        else:
+            st.warning("Vul zowel een pony-naam als een opmerking in.")
+
+st.markdown("---")
+st.subheader("📋 Bestaande opmerkingen")
+
+if not opmerkingen:
+    st.info("Nog geen opmerkingen toegevoegd.")
+else:
+    verwijder_key = None
+    for pony, eigenschap in opmerkingen.items():
+        col1, col2, col3 = st.columns([3, 6, 1])
+        col1.markdown(f"**{pony}**")
+        col2.markdown(eigenschap)
+        if col3.button("🗑️", key=f"verwijder_{pony}"):
+            verwijder_key = pony
+
+    if verwijder_key:
+        opmerkingen.pop(verwijder_key)
+        save_opmerkingen(opmerkingen)
+        st.experimental_rerun()
