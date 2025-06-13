@@ -1,159 +1,204 @@
 import streamlit as st
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from uuid import uuid4
+import pandas as pd
+import datetime
+import re
+import locale
+from pathlib import Path
+import os
+from slides_uploader import upload_to_slides
 
-# ID van je bestaande presentatie
-PRESENTATION_ID = "1vuVUa8oVsXYNoESTGdZH0NYqJJnNF_HgguSsdAGOkk4"
-
-def parse_text_with_style(text, font_size=16):
-    elements = []
-    bold = False
-    yellow = False
-    buffer = ""
-
-    def flush():
-        nonlocal buffer, bold, yellow
-        if buffer:
-            style = {"fontSize": {"magnitude": font_size, "unit": "PT"}}
-            if bold:
-                style["bold"] = True
-            if yellow:
-                style["foregroundColor"] = {
-                    "opaqueColor": {
-                        "rgbColor": {"red": 1, "green": 0.8, "blue": 0}
-                    }
-                }
-            elements.append({"textRun": {"content": buffer, "style": style}})
-            buffer = ""
-
-    i = 0
-    while i < len(text):
-        if text[i:i + 2] == "**":
-            flush()
-            bold = not bold
-            i += 2
-        elif text[i:i + 6] == "[GEEL]":
-            flush()
-            yellow = True
-            i += 6
-        elif text[i:i + 7] == "[/GEEL]":
-            flush()
-            yellow = False
-            i += 7
-        else:
-            buffer += text[i]
-            i += 1
-    flush()
-    return elements
-
-def create_textbox(object_id, slide_id, x, y, width, height):
-    return {
-        "createShape": {
-            "objectId": object_id,
-            "shapeType": "TEXT_BOX",
-            "elementProperties": {
-                "pageObjectId": slide_id,
-                "size": {"height": {"magnitude": height, "unit": "PT"}, "width": {"magnitude": width, "unit": "PT"}},
-                "transform": {
-                    "scaleX": 1, "scaleY": 1,
-                    "translateX": x, "translateY": y,
-                    "unit": "PT"
-                }
-            }
-        }
-    }
-
-def upload_to_slides():
+# Nederlandse datuminstelling
+try:
+    locale.setlocale(locale.LC_TIME, 'nl_NL.UTF-8')
+except:
     try:
-        st.info("Uploaden naar Google Slides gestart...")
+        locale.setlocale(locale.LC_TIME, 'nl_NL')
+    except:
+        pass
 
-        creds_dict = st.secrets["google_service_account"]
-        creds = service_account.Credentials.from_service_account_info(
-            creds_dict,
-            scopes=["https://www.googleapis.com/auth/presentations"]
-        )
+st.set_page_config(page_title="Het Zesspan TV Scherm", layout="wide")
+st.title("🏄 Het Zesspan TV Scherm")
 
-        service = build("slides", "v1", credentials=creds)
+tekstpad = Path("ondertekst.txt")
 
-        # Verwijder bestaande slides behalve de eerste
-        presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
-        slide_ids = [slide["objectId"] for slide in presentation.get("slides", [])[1:]]
-        delete_requests = [{"deleteObject": {"objectId": sid}} for sid in slide_ids]
+# Ondertekst laden
+if "ondertekst" not in st.session_state:
+    if tekstpad.exists():
+        regels = tekstpad.read_text(encoding="utf-8").split("\n")
+        st.session_state.ondertekst = regels[0] if regels else ""
+        st.session_state.vet = regels[1] == "True" if len(regels) > 1 else False
+        st.session_state.geel = regels[2] == "True" if len(regels) > 2 else False
+    else:
+        st.session_state.ondertekst = ""
+        st.session_state.vet = False
+        st.session_state.geel = False
 
-        all_requests = delete_requests.copy()
+# Sidebar instellingen
+st.sidebar.header("📝 Ondertekst instellen")
+nieuwe_tekst = st.sidebar.text_area("Tekst onderaan elke sectie", st.session_state.ondertekst or "")
+vet = st.sidebar.checkbox("Dikgedrukt", value=st.session_state.vet)
+geel = st.sidebar.checkbox("Geel markeren", value=st.session_state.geel)
+if st.sidebar.button("📂 Opslaan"):
+    st.session_state.ondertekst = nieuwe_tekst
+    st.session_state.vet = vet
+    st.session_state.geel = geel
+    tekstpad.write_text(f"{nieuwe_tekst}\n{vet}\n{geel}", encoding="utf-8")
+    st.sidebar.success("Tekst opgeslagen!")
 
-        blokken = st.session_state.get("slides_data", [])
-        blok_index = 0
+# Upload knop
+if st.button("📤 Upload naar (online) scherm"):
+    upload_to_slides()
 
-        for blok in blokken:
-            slide_id = f"slide_{uuid4().hex}"
-            all_requests.append({
-                "createSlide": {
-                    "objectId": slide_id,
-                    "insertionIndex": 1,
-                    "slideLayoutReference": {"predefinedLayout": "BLANK"}
-                }
-            })
+st.markdown("""
+Upload hieronder het Excel-bestand met de planning. Kies daarna het juiste tabblad.
+De app herkent automatisch de ponynamen, lestijden, kindernamen (geanonimiseerd) en juffen.
+""")
 
-            # Titel (datum)
-            datum_id = f"datum_{uuid4().hex}"
-            all_requests.append(create_textbox(datum_id, slide_id, 50, 20, 600, 50))
-            all_requests.append({
-                "insertText": {
-                    "objectId": datum_id,
-                    "insertionIndex": 0,
-                    "text": blok["title"]
-                }
-            })
-            all_requests.append({
-                "updateTextStyle": {
-                    "objectId": datum_id,
-                    "textRange": {"type": "ALL"},
-                    "style": {"fontSize": {"magnitude": 20, "unit": "PT"}, "bold": True},
-                    "fields": "fontSize,bold"
-                }
-            })
+uploaded_file = st.file_uploader("📄 Upload je Excel-bestand", type=["xlsx"])
 
-            # Inhoud
-            content_id = f"content_{uuid4().hex}"
-            line_count = blok["content"].count("\n") + 1
-            font_size = 16 if line_count <= 10 else 14 if line_count <= 15 else 12
-            all_requests.append(create_textbox(content_id, slide_id, 50, 80, 600, 400))
+if uploaded_file:
+    xls = pd.ExcelFile(uploaded_file)
+    sheet = st.selectbox("📜 Kies een tabblad", xls.sheet_names)
+    df = pd.read_excel(xls, sheet_name=sheet, header=None)
+    st.dataframe(df.head(20))
 
-            text_elements = parse_text_with_style(blok["content"], font_size)
-            full_text = "".join([e["textRun"]["content"] for e in text_elements])
-            all_requests.append({
-                "insertText": {
-                    "objectId": content_id,
-                    "insertionIndex": 0,
-                    "text": full_text
-                }
-            })
-            index = 0
-            for e in text_elements:
-                length = len(e["textRun"]["content"])
-                all_requests.append({
-                    "updateTextStyle": {
-                        "objectId": content_id,
-                        "textRange": {"type": "FIXED_RANGE", "startIndex": index, "endIndex": index + length},
-                        "style": e["textRun"]["style"],
-                        "fields": ",".join(e["textRun"]["style"].keys())
-                    }
-                })
-                index += length
+    ponynamen_kolom = None
+    ponynamen_start_index = 0
+    for col in df.columns:
+        telling, start_index = 0, None
+        for idx, value in df[col].dropna().astype(str).items():
+            if re.match(r"^[A-Za-z\- ]+$", value):
+                if telling == 0:
+                    start_index = idx
+                telling += 1
+                if telling >= 60:
+                    ponynamen_kolom = col
+                    ponynamen_start_index = start_index
+                    break
+            else:
+                telling = 0
+        if ponynamen_kolom is not None:
+            break
 
-            blok_index += 1
+    if ponynamen_kolom is not None:
+        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-\u2013\u2212]\s*\d{1,2}:\d{2})?\b")
+        tijdrij = next((i for i in range(0, 5) if any(tijd_pattern.search(str(cell)) for cell in df.iloc[i])), None)
 
-        service.presentations().batchUpdate(
-            presentationId=PRESENTATION_ID,
-            body={"requests": all_requests}
-        ).execute()
+        if tijdrij is not None:
+            tijd_dict = {
+                col: str(df.iloc[tijdrij, col]).strip()
+                for col in df.columns
+                if tijd_pattern.match(str(df.iloc[tijdrij, col]))
+            }
 
-        st.success("✅ Succesvol geüpload naar Google Slides!")
+            tijd_items = sorted(
+                tijd_dict.items(),
+                key=lambda x: datetime.datetime.strptime(
+                    re.search(r"\d{1,2}:\d{2}", x[1]).group(), "%H:%M"
+                )
+            )
 
-    except HttpError as error:
-        st.error(f"Fout bij Google Slides API: {error}")
-    except Exception as e:
-        st.error(f"Fout tijdens uploaden naar Slides: {e}")
+            groepen_per_blok = []
+            huidige_blok = []
+            laatst_verwerkte_tijd = None
+
+            for col, tijd in tijd_items:
+                tijd_match = re.search(r"\d{1,2}:\d{2}", tijd)
+                if not tijd_match:
+                    continue
+                tijd_dt = datetime.datetime.strptime(tijd_match.group(), "%H:%M")
+
+                if laatst_verwerkte_tijd is None or (tijd_dt - laatst_verwerkte_tijd).total_seconds() > 30 * 60:
+                    if huidige_blok:
+                        groepen_per_blok.append(huidige_blok)
+                    huidige_blok = [(col, tijd)]
+                    laatst_verwerkte_tijd = tijd_dt
+                else:
+                    huidige_blok.append((col, tijd))
+
+            if huidige_blok:
+                groepen_per_blok.append(huidige_blok)
+
+            datum_vandaag = datetime.datetime.today().strftime("%d-%m-%Y")
+            eigen_pony_rij = next((r for r in range(ponynamen_start_index, len(df))
+                                   if "eigen pony" in str(df.iloc[r, ponynamen_kolom]).strip().lower()), None)
+
+            reeds_in_bak = set()
+            slides_data = []
+
+            for blok in groepen_per_blok:
+                groepen = []
+                for i, (col, tijd) in enumerate(blok):
+                    max_rij = eigen_pony_rij if eigen_pony_rij else len(df)
+                    juf = str(df.iloc[eigen_pony_rij + 2, col]).strip().title() if eigen_pony_rij and pd.notna(df.iloc[eigen_pony_rij + 2, col]) else "onbekend"
+
+                    kind_pony_combinaties = []
+                    namen_counter = {}
+
+                    for r in range(ponynamen_start_index, max_rij):
+                        naam = str(df.iloc[r, col])
+                        pony = str(df.iloc[r, ponynamen_kolom])
+                        if not naam.strip() or naam.strip().lower() in ["", "nan", "x"]:
+                            continue
+
+                        delen = naam.strip().split()
+                        voornaam = delen[0].capitalize() if delen else ""
+                        achternaam = ""
+                        tussenvoegsels = {"van", "de", "der", "den", "ter", "ten", "het", "te"}
+                        for deel in delen[1:]:
+                            if deel.lower() not in tussenvoegsels:
+                                achternaam = deel.capitalize()
+                                break
+                        code = voornaam
+                        key = voornaam.lower()
+                        if key in namen_counter:
+                            code += achternaam[:1].upper()
+                        namen_counter[key] = namen_counter.get(key, 0) + 1
+
+                        locatie = "(B)" if pony in reeds_in_bak else "(S)"
+                        kind_pony_combinaties.append((code, f"{pony.title()} {locatie}"))
+                        reeds_in_bak.add(pony)
+
+                    kind_pony_combinaties.sort(key=lambda x: x[0].lower())
+                    groepen.append({
+                        "tijd": tijd,
+                        "juf": juf,
+                        "kinderen": kind_pony_combinaties
+                    })
+
+                # splitsen in slides van maximaal 3 groepen per slide
+                for i in range(0, len(groepen), 3):
+                    deel = groepen[i:i+3]
+                    groep_tekst = ""
+                    for groep in deel:
+                        groep_tekst += f"Groep {groep['tijd']} – Juf: {groep['juf']}\n"
+                        for naam, pony in groep['kinderen']:
+                            groep_tekst += f"- {naam} – {pony}\n"
+                        groep_tekst += "\n"
+
+                    onder = st.session_state.ondertekst.strip()
+                    if onder:
+                        if st.session_state.geel:
+                            onder = f"[GEEL]{onder}[/GEEL]"
+                        if st.session_state.vet:
+                            onder = f"**{onder}**"
+                        groep_tekst += f"{onder}\n"
+
+                    slides_data.append({
+                        "title": f"Planning {datum_vandaag}",
+                        "content": groep_tekst.strip()
+                    })
+
+            st.session_state["slides_data"] = slides_data
+
+            st.subheader("✅ Controle: slides_data inhoud")
+            for i, blok in enumerate(slides_data, start=1):
+                st.markdown(f"**Slide {i}**")
+                st.text(f"Titel: {blok['title']}\nInhoud:\n{blok['content']}")
+
+        else:
+            st.warning("Kon geen rij met lestijden vinden.")
+    else:
+        st.warning("Kon geen kolom met >60 ponynamen vinden.")
+else:
+    st.info("Upload eerst een Excel-bestand om verder te gaan.")
