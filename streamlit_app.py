@@ -15,7 +15,7 @@ except:
 
 st.set_page_config(page_title="Het Zesspan Ponyplanner", layout="wide")
 
-st.title("🐴 Het Zesspan Ponyplanner")
+st.title("🍴 Het Zesspan Ponyplanner")
 
 st.markdown("""
 Upload hieronder het Excel-bestand met de planning. Kies daarna het juiste tabblad.
@@ -26,13 +26,13 @@ uploaded_file = st.file_uploader("📄 Upload je Excel-bestand", type=["xlsx"])
 
 if uploaded_file:
     xls = pd.ExcelFile(uploaded_file)
-    sheet = st.selectbox("📃 Kies een tabblad", xls.sheet_names)
+    sheet = st.selectbox("📜 Kies een tabblad", xls.sheet_names)
     df = pd.read_excel(xls, sheet_name=sheet, header=None)
 
     st.markdown("### 📊 Voorbeeld van de data")
     st.dataframe(df.head(20))
 
-    # Zoek de kolom met >60 aaneengeschakelde pony-namen
+    # Zoek de kolom met >60 aaneengeschakelde pony-namen (niet leeg, niet numeriek)
     ponynamen_kolom = None
     ponynamen_start_index = 0
     for col in df.columns:
@@ -54,7 +54,7 @@ if uploaded_file:
             break
 
     if ponynamen_kolom is not None:
-        # Zoek de rij met tijden
+        # Zoek de rij met tijden (formaat HH:MM of HH:MM-HH:MM)
         tijdrij = None
         tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-–−]\s*\d{1,2}:\d{2})?\b")
         for i in range(0, 5):
@@ -72,7 +72,7 @@ if uploaded_file:
             tijd_lijst = list(tijd_dict.items())
             tijd_lijst.sort(key=lambda x: x[0])
 
-            st.markdown("### 📅 Planning per groep")
+            st.markdown("### 🗓️ Planning per groep")
             datum_vandaag = datetime.datetime.today().strftime("%A %d-%m-%Y")
             st.markdown(f"**Datum:** {datum_vandaag}")
 
@@ -82,7 +82,7 @@ if uploaded_file:
                 if hoofd_tijd in gebruikte_tijden:
                     continue
 
-                basis_tijd_clean = re.sub(r"[–−]", "-", hoofd_tijd)
+                basis_tijd_clean = re.sub(r"[-–−]", "-", hoofd_tijd)
                 basis_tijd_clean = re.split(r"[-\s]", basis_tijd_clean)[0].strip()
                 try:
                     basis_tijd = datetime.datetime.strptime(basis_tijd_clean, "%H:%M")
@@ -93,7 +93,7 @@ if uploaded_file:
                 gekoppelde_kolommen = []
 
                 for andere_tijd, andere_kol in tijd_lijst:
-                    tijd_clean = re.sub(r"[–−]", "-", andere_tijd)
+                    tijd_clean = re.sub(r"[-–−]", "-", andere_tijd)
                     tijd_clean = re.split(r"[-\s]", tijd_clean)[0].strip()
                     try:
                         test_tijd = datetime.datetime.strptime(tijd_clean, "%H:%M")
@@ -157,10 +157,13 @@ if uploaded_file:
 
                     if kind_pony_combinaties:
                         with col_container:
-                            st.markdown(f"<strong>Groep {tijd}</strong>", unsafe_allow_html=True)
-                            st.markdown(f"<strong>Juf:</strong> {juf}", unsafe_allow_html=True)
+                            st.markdown(f"**Groep {tijd}**")
+                            st.markdown(f"**Juf:** {juf}")
                             for naam, pony in kind_pony_combinaties:
                                 st.markdown(f"- {naam} – {pony}")
+
+                st.markdown("---")  # Nieuwe slide
+
         else:
             st.warning("Kon geen rij met lestijden vinden.")
     else:
