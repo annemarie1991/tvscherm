@@ -3,6 +3,19 @@ import pandas as pd
 import datetime
 import re
 import locale
+import os
+import json
+
+# Pad voor notitie-opslag
+notes_path = "/mnt/data/ponyplanner_notitie.json"
+notitie_standaard = {"text": "", "bold": False, "highlight": False}
+
+# Notitie laden
+if os.path.exists(notes_path):
+    with open(notes_path, "r") as f:
+        opgeslagen_notitie = json.load(f)
+else:
+    opgeslagen_notitie = notitie_standaard
 
 # Nederlandse datum
 try:
@@ -21,6 +34,25 @@ Upload hieronder het Excel-bestand met de planning. Kies daarna het juiste tabbl
 De app herkent automatisch de ponynamen, lestijden, kindernamen (geanonimiseerd) en juffen.
 """)
 
+# 🟨 Notitiebeheer (boven de uploader)
+st.markdown("---")
+st.markdown("### 📌 Instellingen voor ondertekst")
+
+with st.form("notitie_form"):
+    tekst = st.text_input("Notitie voor onderaan iedere sectie:", value=opgeslagen_notitie.get("text", ""))
+    col1, col2 = st.columns(2)
+    bold = col1.checkbox("Dikgedrukt", value=opgeslagen_notitie.get("bold", False))
+    highlight = col2.checkbox("Geel gemarkeerd", value=opgeslagen_notitie.get("highlight", False))
+    opgeslagen = st.form_submit_button("🔖 Opslaan")
+
+if opgeslagen:
+    opgeslagen_notitie = {"text": tekst, "bold": bold, "highlight": highlight}
+    with open(notes_path, "w") as f:
+        json.dump(opgeslagen_notitie, f)
+    st.success("Opgeslagen! Herlaad de pagina om te testen.")
+
+st.markdown("---")
+
 uploaded_file = st.file_uploader("📄 Upload je Excel-bestand", type=["xlsx"])
 
 if uploaded_file:
@@ -29,7 +61,6 @@ if uploaded_file:
     df = pd.read_excel(xls, sheet_name=sheet, header=None)
     st.dataframe(df.head(20))
 
-    # Zoek kolom met >60 aaneengeschakelde ponynamen
     ponynamen_kolom = None
     ponynamen_start_index = 0
     for col in df.columns:
@@ -49,9 +80,8 @@ if uploaded_file:
             break
 
     if ponynamen_kolom is not None:
-        # Zoek de rij met tijden
         tijdrij = None
-        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-–−]\s*\d{1,2}:\d{2})?\b")
+        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-\u2013\u2212]\s*\d{1,2}:\d{2})?\b")
         for i in range(0, 5):
             if any(tijd_pattern.search(str(cell)) for cell in df.iloc[i]):
                 tijdrij = i
@@ -64,7 +94,6 @@ if uploaded_file:
                 if tijd_pattern.match(cel):
                     tijd_dict[col] = cel.strip()
 
-            # Tijdsortering
             tijd_items = sorted(
                 tijd_dict.items(),
                 key=lambda x: datetime.datetime.strptime(
@@ -97,11 +126,11 @@ if uploaded_file:
             if huidige_blok:
                 groepen_per_blok.append(huidige_blok)
 
-            # Toon groepen per tijdsblok
-            st.markdown("### 📅 Planning per groep")
-            datum_vandaag = datetime.datetime.today().strftime("%d-%m-%Y")  # ✅ Alleen de datum
+            st.markdown("### 🗓️ Planning per groep")
 
-            # Zoek "eigen pony" rij
+            # Alleen datum (geen weekdag)
+            datum_vandaag = datetime.datetime.today().strftime("%d-%m-%Y")
+
             eigen_pony_rij = None
             for r in range(ponynamen_start_index, len(df)):
                 waarde = str(df.iloc[r, ponynamen_kolom]).strip().lower()
@@ -109,13 +138,13 @@ if uploaded_file:
                     eigen_pony_rij = r
                     break
 
-            reeds_in_bak = set()  # ✅ Houdt bij welke pony’s al gebruikt zijn
+            reeds_in_bak = set()
 
             for blok in groepen_per_blok:
                 st.markdown("---")
-                st.markdown(f"<h3 style='text-align: center;'>📅 {datum_vandaag}</h3>", unsafe_allow_html=True)
-
+                st.markdown(f"<div style='text-align: center; font-size: 20px;'><strong>{datum_vandaag}</strong></div>", unsafe_allow_html=True)
                 cols = st.columns(len(blok))
+
                 for (col, tijd), container in zip(blok, cols):
                     max_rij = eigen_pony_rij if eigen_pony_rij else len(df)
                     juf = "onbekend"
@@ -157,6 +186,16 @@ if uploaded_file:
                         st.markdown(f"<strong>Juf:</strong> {juf}</strong>", unsafe_allow_html=True)
                         for naam, pony in kind_pony_combinaties:
                             st.markdown(f"- {naam} – {pony}")
+
+                # Ondertekst weergeven
+                if opgeslagen_notitie["text"]:
+                    stijl = "text-align: center;"
+                    if opgeslagen_notitie["highlight"]:
+                        stijl += " background-color: yellow;"
+                    if opgeslagen_notitie["bold"]:
+                        opgeslagen_notitie["text"] = f"<strong>{opgeslagen_notitie['text']}</strong>"
+                    st.markdown(f"<div style='{stijl} margin-top: 10px;'>{opgeslagen_notitie['text']}</div>", unsafe_allow_html=True)
+
         else:
             st.warning("Kon geen rij met lestijden vinden.")
     else:
