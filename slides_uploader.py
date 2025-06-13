@@ -85,14 +85,13 @@ def upload_to_slides():
         all_requests = delete_requests.copy()
 
         blokken = st.session_state.get("slides_data", [])
-        blok_index = 0
 
-        for blok in blokken:
+        for index, blok in enumerate(blokken):
             slide_id = f"slide_{uuid4().hex}"
             all_requests.append({
                 "createSlide": {
                     "objectId": slide_id,
-                    "insertionIndex": 1,
+                    "insertionIndex": index + 1,
                     "slideLayoutReference": {"predefinedLayout": "BLANK"}
                 }
             })
@@ -131,20 +130,18 @@ def upload_to_slides():
                     "text": full_text
                 }
             })
-            index = 0
+            index_offset = 0
             for e in text_elements:
                 length = len(e["textRun"]["content"])
                 all_requests.append({
                     "updateTextStyle": {
                         "objectId": content_id,
-                        "textRange": {"type": "FIXED_RANGE", "startIndex": index, "endIndex": index + length},
+                        "textRange": {"type": "FIXED_RANGE", "startIndex": index_offset, "endIndex": index_offset + length},
                         "style": e["textRun"]["style"],
                         "fields": ",".join(e["textRun"]["style"].keys())
                     }
                 })
-                index += length
-
-            blok_index += 1
+                index_offset += length
 
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
