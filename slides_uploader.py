@@ -62,7 +62,6 @@ def upload_to_slides():
         )
         service = build('slides', 'v1', credentials=credentials)
 
-        # Verwijder alle bestaande slides behalve de eerste
         presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
         slide_ids = [slide['objectId'] for slide in presentation.get('slides', [])[1:]]
         delete_requests = [{"deleteObject": {"objectId": slide_id}} for slide_id in slide_ids]
@@ -85,7 +84,7 @@ def upload_to_slides():
                 }
             })
 
-            # Titel: datum bovenaan in het midden
+            # Titel bovenaan
             title_id = f"title_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "createShape": {
@@ -129,8 +128,7 @@ def upload_to_slides():
 
                 content = f"**{col['tijd']}**\n**Juf: {col['juf']}**\n\n"
                 for kind, pony in col["kinderen"]:
-                    opm = pony_opmerking(pony)
-                    content += f"{kind} – {pony}{opm}\n"
+                    content += f"{kind} – {pony}\n"
 
                 textbox_id = f"textbox_{uuid.uuid4().hex[:8]}"
                 requests.append({
@@ -174,7 +172,7 @@ def upload_to_slides():
                         })
                     index_start += length
 
-            # Ondertekst
+            # Ondertekst (iets hoger)
             if blok.get("ondertekst"):
                 onder_id = f"onder_{uuid.uuid4().hex[:8]}"
                 requests.append({
@@ -187,7 +185,7 @@ def upload_to_slides():
                                      "width": {"magnitude": 600, "unit": "PT"}},
                             "transform": {
                                 "scaleX": 1, "scaleY": 1,
-                                "translateX": 50, "translateY": 370,
+                                "translateX": 50, "translateY": 350,
                                 "unit": "PT"
                             }
                         }
