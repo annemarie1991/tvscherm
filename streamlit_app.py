@@ -63,72 +63,91 @@ if uploaded_file:
                 break
 
         if tijdrij is not None:
-            tijden = []
-            kolommen = []
+            tijd_dict = {}
             for col in df.columns:
                 cel = str(df.iloc[tijdrij, col])
                 if tijd_pattern.match(cel):
-                    tijden.append(cel)
-                    kolommen.append(col)
+                    tijd_dict.setdefault(cel.strip(), []).append(col)
+
+            tijd_lijst = list(tijd_dict.items())
+            tijd_lijst.sort(key=lambda x: x[0])
 
             st.markdown("### 📅 Planning per groep")
             datum_vandaag = datetime.datetime.today().strftime("%A %d-%m-%Y")
             st.markdown(f"**Datum:** {datum_vandaag}")
 
-            for tijd, col in zip(tijden, kolommen):
-                kind_pony_combinaties = []
-                juf = "onbekend"
-                max_rij = len(df)
-                eigen_pony_rij = None
+            gebruikte_tijden = set()
 
-                # Zoek de rij waar "eigen pony" staat in de ponynamen-kolom, om af te kappen
-                for i in range(ponynamen_start_index, len(df)):
-                    waarde = str(df.iloc[i, ponynamen_kolom]).strip().lower()
-                    if "eigen pony" in waarde:
-                        eigen_pony_rij = i
-                        max_rij = i
-                        break
+            for hoofd_tijd, kolommen in tijd_lijst:
+                if hoofd_tijd in gebruikte_tijden:
+                    continue
 
-                # Nieuw: kijk 2 rijen onder 'eigen pony' in de groepskolom voor juf
-                if eigen_pony_rij is not None and eigen_pony_rij + 2 < len(df):
-                    mogelijke_juf = str(df.iloc[eigen_pony_rij + 2, col]).strip()
-                    if mogelijke_juf and mogelijke_juf.lower() != "nan":
-                        juf = mogelijke_juf.title()
+                basis_tijd = datetime.datetime.strptime(hoofd_tijd.split('-')[0].strip(), "%H:%M")
 
-                namen_counter = {}
+                gekoppelde_tijden = []
+                gekoppelde_kolommen = []
 
-                for i in range(ponynamen_start_index, max_rij):
-                    ponycel = str(df.iloc[i, ponynamen_kolom]) if i < len(df) else ""
-                    naam = str(df.iloc[i, col]) if col in df.columns and i < len(df) else ""
+                for andere_tijd, andere_kol in tijd_lijst:
+                    test_tijd = datetime.datetime.strptime(andere_tijd.split('-')[0].strip(), "%H:%M")
+                    verschil = (test_tijd - basis_tijd).total_seconds() / 60
+                    if 0 <= verschil <= 30:
+                        gekoppelde_tijden.append(andere_tijd)
+                        gekoppelde_kolommen.append((andere_tijd, andere_kol))
+                        gebruikte_tijden.add(andere_tijd)
 
-                    if not naam or naam.strip().lower() in ["", "nan", "x"]:
-                        continue
+                columns = st.columns(len(gekoppelde_kolommen))
+                for (tijd, kolset), col_container in zip(gekoppelde_kolommen, columns):
+                    for col in kolset:
+                        kind_pony_combinaties = []
+                        juf = "onbekend"
+                        max_rij = len(df)
+                        eigen_pony_rij = None
 
-                    pony = ponycel.strip().title()
-                    delen = naam.strip().split()
-                    voornaam = delen[0].capitalize() if delen else ""
-                    achternaam = ""
-                    tussenvoegsels = {"van", "de", "der", "den", "ter", "ten", "het", "te"}
-                    for deel in delen[1:]:
-                        if deel.lower() not in tussenvoegsels:
-                            achternaam = deel.capitalize()
-                            break
-                    code = voornaam
-                    key = voornaam.lower()
-                    if key in namen_counter:
-                        code += achternaam[:1].upper()
-                    namen_counter[key] = namen_counter.get(key, 0) + 1
-                    kind_pony_combinaties.append((code, pony))
+                        for i in range(ponynamen_start_index, len(df)):
+                            waarde = str(df.iloc[i, ponynamen_kolom]).strip().lower()
+                            if "eigen pony" in waarde:
+                                eigen_pony_rij = i
+                                max_rij = i
+                                break
 
-                # Sorteer op voornaam (code)
-                kind_pony_combinaties.sort(key=lambda x: x[0].lower())
+                        if eigen_pony_rij is not None and eigen_pony_rij + 2 < len(df):
+                            mogelijke_juf = str(df.iloc[eigen_pony_rij + 2, col]).strip()
+                            if mogelijke_juf and mogelijke_juf.lower() != "nan":
+                                juf = mogelijke_juf.title()
 
-                if kind_pony_combinaties:
-                    with st.container():
-                        st.markdown(f"<strong>Groep {tijd}</strong>", unsafe_allow_html=True)
-                        st.markdown(f"<strong>Juf:</strong> {juf}", unsafe_allow_html=True)
-                        for naam, pony in kind_pony_combinaties:
-                            st.markdown(f"- {naam} – {pony}")
+                        namen_counter = {}
+
+                        for i in range(ponynamen_start_index, max_rij):
+                            ponycel = str(df.iloc[i, ponynamen_kolom]) if i < len(df) else ""
+                            naam = str(df.iloc[i, col]) if col in df.columns and i < len(df) else ""
+
+                            if not naam or naam.strip().lower() in ["", "nan", "x"]:
+                                continue
+
+                            pony = ponycel.strip().title()
+                            delen = naam.strip().split()
+                            voornaam = delen[0].capitalize() if delen else ""
+                            achternaam = ""
+                            tussenvoegsels = {"van", "de", "der", "den", "ter", "ten", "het", "te"}
+                            for deel in delen[1:]:
+                                if deel.lower() not in tussenvoegsels:
+                                    achternaam = deel.capitalize()
+                                    break
+                            code = voornaam
+                            key = voornaam.lower()
+                            if key in namen_counter:
+                                code += achternaam[:1].upper()
+                            namen_counter[key] = namen_counter.get(key, 0) + 1
+                            kind_pony_combinaties.append((code, pony))
+
+                        kind_pony_combinaties.sort(key=lambda x: x[0].lower())
+
+                        if kind_pony_combinaties:
+                            with col_container:
+                                st.markdown(f"<strong>Groep {tijd}</strong>", unsafe_allow_html=True)
+                                st.markdown(f"<strong>Juf:</strong> {juf}", unsafe_allow_html=True)
+                                for naam, pony in kind_pony_combinaties:
+                                    st.markdown(f"- {naam} – {pony}")
         else:
             st.warning("Kon geen rij met lestijden vinden.")
     else:
