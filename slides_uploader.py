@@ -1,146 +1,150 @@
-import streamlit as st
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from uuid import uuid4
+import uuid
+import os
+import streamlit as st
 
-# ID van je bestaande presentatie
-PRESENTATION_ID = "1vuVUa8oVsXYNoESTGdZH0NYqJJnNF_HgguSsdAGOkk4"
-
-def create_textbox(object_id, slide_id, x, y, width, height):
-    return {
-        "createShape": {
-            "objectId": object_id,
-            "shapeType": "TEXT_BOX",
-            "elementProperties": {
-                "pageObjectId": slide_id,
-                "size": {
-                    "height": {"magnitude": height, "unit": "PT"},
-                    "width": {"magnitude": width, "unit": "PT"},
-                },
-                "transform": {
-                    "scaleX": 1,
-                    "scaleY": 1,
-                    "translateX": x,
-                    "translateY": y,
-                    "unit": "PT",
-                },
-            }
-        }
-    }
+SCOPES = ['https://www.googleapis.com/auth/presentations']
+SERVICE_ACCOUNT_FILE = 'service_account.json'
+PRESENTATION_ID = '1vuVUa8oVsXYNoESTGdZH0NYqJJnNF_HgguSsdAGOkk4'
 
 def upload_to_slides():
+    if "slides_data" not in st.session_state or not st.session_state["slides_data"]:
+        st.error("Geen slides om te uploaden.")
+        return
+
     try:
-        st.info("Uploaden naar Google Slides gestart...")
-
-        creds_dict = st.secrets["google_service_account"]
-        creds = service_account.Credentials.from_service_account_info(
-            creds_dict,
-            scopes=["https://www.googleapis.com/auth/presentations"],
+        credentials = service_account.Credentials.from_service_account_file(
+            SERVICE_ACCOUNT_FILE, scopes=SCOPES
         )
+        service = build('slides', 'v1', credentials=credentials)
 
-        service = build("slides", "v1", credentials=creds)
-
-        # Verwijder bestaande slides behalve de eerste
+        # Verwijder eerst alle bestaande slides behalve de eerste
         presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
-        slide_ids = [slide["objectId"] for slide in presentation.get("slides", [])[1:]]
-        delete_requests = [{"deleteObject": {"objectId": sid}} for sid in slide_ids]
-        all_requests = delete_requests.copy()
+        slide_ids = [slide['objectId'] for slide in presentation.get('slides', [])[1:]]
 
-        blokken = [b for b in st.session_state.get("slides_data", []) if b.get("columns")]
+        delete_requests = [{
+            "deleteObject": {
+                "objectId": slide_id
+            }
+        } for slide_id in slide_ids]
 
-        for blok in blokken:
-            slide_id = f"slide_{uuid4().hex}"
-            all_requests.append({
+        if delete_requests:
+            service.presentations().batchUpdate(
+                presentationId=PRESENTATION_ID,
+                body={"requests": delete_requests}
+            ).execute()
+
+        # Voeg nieuwe slides toe
+        requests = []
+        for index, blok in enumerate(st.session_state["slides_data"]):
+            slide_id = f"slide_{uuid.uuid4().hex[:8]}"
+            requests.append({
                 "createSlide": {
                     "objectId": slide_id,
-                    "insertionIndex": 1,
-                    "slideLayoutReference": {"predefinedLayout": "BLANK"},
+                    "insertionIndex": str(index + 1),
+                    "slideLayoutReference": {
+                        "predefinedLayout": "BLANK"
+                    }
                 }
             })
 
-            # Titel (datum)
-            datum_id = f"datum_{uuid4().hex}"
-            all_requests.append(create_textbox(datum_id, slide_id, 50, 20, 600, 50))
-            all_requests.append({
-                "insertText": {
-                    "objectId": datum_id,
-                    "insertionIndex": 0,
-                    "text": blok.get("title", "Planning"),
-                }
-            })
-            all_requests.append({
-                "updateTextStyle": {
-                    "objectId": datum_id,
-                    "textRange": {"type": "ALL"},
-                    "style": {"fontSize": {"magnitude": 20, "unit": "PT"}, "bold": True},
-                    "fields": "fontSize,bold",
-                }
-            })
+            x_offset = 50
+            y_offset = 50
+            column_width = 200
+            box_height = 20
+            spacing = 30
 
-            # Elke groep in kolommen (maximaal 3 per slide)
-            columns = blok.get("columns", [])
-            for i, col in enumerate(columns):
-                x = 50 + i * 190
-                y = 80
-                col_id = f"col_{uuid4().hex}"
-                all_requests.append(create_textbox(col_id, slide_id, x, y, 180, 400))
+            for i, col in enumerate(blok["columns"]):
+                box_y = y_offset
+                box_x = x_offset + i * (column_width + 40)
 
-                regels = [f"**{col['tijd']}**", f"Juf: {col['juf']}"]
-                regels += [f"{k} – {p}" for k, p in col.get("kinderen", [])]
+                # Tijd en juf
+                content = f"**{col['tijd']}**\nJuf: {col['juf']}\n\n"
+                for kind, pony in col["kinderen"]:
+                    content += f"{kind} – {pony}\n"
 
-                tekst = "\n".join(regels)
-                all_requests.append({
+                requests.append({
+                    "createShape": {
+                        "objectId": f"textbox_{uuid.uuid4().hex[:8]}",
+                        "shapeType": "TEXT_BOX",
+                        "elementProperties": {
+                            "pageObjectId": slide_id,
+                            "size": {
+                                "height": {"magnitude": 300, "unit": "PT"},
+                                "width": {"magnitude": column_width, "unit": "PT"}
+                            },
+                            "transform": {
+                                "scaleX": 1, "scaleY": 1,
+                                "translateX": box_x, "translateY": box_y,
+                                "unit": "PT"
+                            }
+                        }
+                    }
+                })
+                requests.append({
                     "insertText": {
-                        "objectId": col_id,
+                        "objectId": requests[-1]["createShape"]["objectId"],
                         "insertionIndex": 0,
-                        "text": tekst,
+                        "text": content
                     }
                 })
 
             # Ondertekst
-            ondertekst = blok.get("ondertekst", "")
-            if ondertekst:
-                onder_id = f"onder_{uuid4().hex}"
-                all_requests.append(create_textbox(onder_id, slide_id, 50, 490, 600, 50))
-                all_requests.append({
-                    "insertText": {
-                        "objectId": onder_id,
-                        "insertionIndex": 0,
-                        "text": ondertekst,
-                    }
-                })
-                fields = []
-                style = {"fontSize": {"magnitude": 14, "unit": "PT"}}
-                if blok.get("vet"):
-                    style["bold"] = True
-                    fields.append("bold")
-                if blok.get("geel"):
-                    style["foregroundColor"] = {
-                        "opaqueColor": {
-                            "rgbColor": {"red": 1, "green": 0.8, "blue": 0}
+            if blok.get("ondertekst"):
+                tekst = blok["ondertekst"]
+                bold = blok.get("vet", False)
+                geel = blok.get("geel", False)
+
+                requests.append({
+                    "createShape": {
+                        "objectId": f"ondertekst_{uuid.uuid4().hex[:8]}",
+                        "shapeType": "TEXT_BOX",
+                        "elementProperties": {
+                            "pageObjectId": slide_id,
+                            "size": {
+                                "height": {"magnitude": 40, "unit": "PT"},
+                                "width": {"magnitude": 600, "unit": "PT"}
+                            },
+                            "transform": {
+                                "scaleX": 1, "scaleY": 1,
+                                "translateX": 50, "translateY": 400,
+                                "unit": "PT"
+                            }
                         }
                     }
-                    fields.append("foregroundColor")
-                fields.append("fontSize")
-                all_requests.append({
+                })
+                requests.append({
+                    "insertText": {
+                        "objectId": requests[-1]["createShape"]["objectId"],
+                        "insertionIndex": 0,
+                        "text": tekst
+                    }
+                })
+                style = {}
+                if bold:
+                    style["bold"] = True
+                if geel:
+                    style["foregroundColor"] = {
+                        "opaqueColor": {"rgbColor": {"red": 1, "green": 0.84, "blue": 0}}
+                    }
+
+                requests.append({
                     "updateTextStyle": {
-                        "objectId": onder_id,
-                        "textRange": {"type": "ALL"},
+                        "objectId": requests[-2]["insertText"]["objectId"],
                         "style": style,
-                        "fields": ",".join(fields),
+                        "textRange": {"type": "ALL"},
+                        "fields": ",".join(style.keys())
                     }
                 })
 
         # Upload naar Google Slides
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
-            body={"requests": all_requests}
+            body={"requests": requests}
         ).execute()
 
-        st.success("✅ Succesvol geüpload naar Google Slides!")
+        st.success("Slides succesvol geüpload!")
 
-    except HttpError as error:
-        st.error(f"Fout bij Google Slides API: {error}")
     except Exception as e:
         st.error(f"Fout tijdens uploaden naar Slides: {e}")
