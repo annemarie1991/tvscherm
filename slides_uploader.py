@@ -3,11 +3,15 @@ from googleapiclient.discovery import build
 import uuid
 import streamlit as st
 import re
+import json
+from pathlib import Path
 
 SCOPES = ['https://www.googleapis.com/auth/presentations']
+SERVICE_ACCOUNT_FILE = 'service_account.json'
 PRESENTATION_ID = '1vuVUa8oVsXYNoESTGdZH0NYqJJnNF_HgguSsdAGOkk4'
 
 def parse_markdown_to_text_elements(text):
+    """Verandert **vetgedrukte** stukken naar Google Slides style-structuur"""
     elements = []
     bold = False
     buffer = ""
@@ -33,16 +37,28 @@ def parse_markdown_to_text_elements(text):
     flush()
     return elements
 
+def pony_opmerking(pony_naam: str) -> str:
+    pad = Path("pony_opmerkingen.json")
+    if not pad.exists():
+        return ""
+    try:
+        with pad.open("r", encoding="utf-8") as f:
+            opmerkingen = json.load(f)
+        for sleutel, tekst in opmerkingen.items():
+            if sleutel.lower() in pony_naam.lower():
+                return f" ({tekst})"
+    except Exception:
+        pass
+    return ""
+
 def upload_to_slides():
     if "slides_data" not in st.session_state or not st.session_state["slides_data"]:
         st.error("Geen slides om te uploaden.")
         return
 
     try:
-        # Gebruik credentials uit secrets.toml
-        credentials_dict = st.secrets["google_service_account"]
-        credentials = service_account.Credentials.from_service_account_info(
-            credentials_dict, scopes=SCOPES
+        credentials = service_account.Credentials.from_service_account_file(
+            SERVICE_ACCOUNT_FILE, scopes=SCOPES
         )
         service = build('slides', 'v1', credentials=credentials)
 
@@ -69,7 +85,7 @@ def upload_to_slides():
                 }
             })
 
-            # Titel bovenaan in het midden
+            # Titel: datum bovenaan in het midden
             title_id = f"title_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "createShape": {
@@ -103,7 +119,6 @@ def upload_to_slides():
                 }
             })
 
-            # Kolommen (kinderen en juf)
             x_offset = 50
             y_offset = 60
             column_width = 200
@@ -114,7 +129,8 @@ def upload_to_slides():
 
                 content = f"**{col['tijd']}**\n**Juf: {col['juf']}**\n\n"
                 for kind, pony in col["kinderen"]:
-                    content += f"{kind} – {pony}\n"
+                    opm = pony_opmerking(pony)
+                    content += f"{kind} – {pony}{opm}\n"
 
                 textbox_id = f"textbox_{uuid.uuid4().hex[:8]}"
                 requests.append({
@@ -123,10 +139,8 @@ def upload_to_slides():
                         "shapeType": "TEXT_BOX",
                         "elementProperties": {
                             "pageObjectId": slide_id,
-                            "size": {
-                                "height": {"magnitude": 300, "unit": "PT"},
-                                "width": {"magnitude": column_width, "unit": "PT"}
-                            },
+                            "size": {"height": {"magnitude": 300, "unit": "PT"},
+                                     "width": {"magnitude": column_width, "unit": "PT"}},
                             "transform": {
                                 "scaleX": 1, "scaleY": 1,
                                 "translateX": box_x, "translateY": box_y,
@@ -153,18 +167,14 @@ def upload_to_slides():
                         requests.append({
                             "updateTextStyle": {
                                 "objectId": textbox_id,
-                                "textRange": {
-                                    "type": "FIXED_RANGE",
-                                    "startIndex": index_start,
-                                    "endIndex": index_start + length
-                                },
+                                "textRange": {"type": "FIXED_RANGE", "startIndex": index_start, "endIndex": index_start + length},
                                 "style": element["textRun"]["style"],
                                 "fields": ",".join(element["textRun"]["style"].keys())
                             }
                         })
                     index_start += length
 
-            # Ondertekst (hoger geplaatst zodat zichtbaar)
+            # Ondertekst
             if blok.get("ondertekst"):
                 onder_id = f"onder_{uuid.uuid4().hex[:8]}"
                 requests.append({
@@ -173,13 +183,11 @@ def upload_to_slides():
                         "shapeType": "TEXT_BOX",
                         "elementProperties": {
                             "pageObjectId": slide_id,
-                            "size": {
-                                "height": {"magnitude": 40, "unit": "PT"},
-                                "width": {"magnitude": 600, "unit": "PT"}
-                            },
+                            "size": {"height": {"magnitude": 60, "unit": "PT"},
+                                     "width": {"magnitude": 600, "unit": "PT"}},
                             "transform": {
                                 "scaleX": 1, "scaleY": 1,
-                                "translateX": 50, "translateY": 340,
+                                "translateX": 50, "translateY": 370,
                                 "unit": "PT"
                             }
                         }
@@ -193,7 +201,24 @@ def upload_to_slides():
                     }
                 })
 
-        # Stuur alle requests naar de Slides API
+                style = {}
+                if blok.get("vet"):
+                    style["bold"] = True
+                if blok.get("geel"):
+                    style["foregroundColor"] = {
+                        "opaqueColor": {"rgbColor": {"red": 1, "green": 0.84, "blue": 0}}
+                    }
+
+                if style:
+                    requests.append({
+                        "updateTextStyle": {
+                            "objectId": onder_id,
+                            "textRange": {"type": "ALL"},
+                            "style": style,
+                            "fields": ",".join(style.keys())
+                        }
+                    })
+
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
             body={"requests": requests}
