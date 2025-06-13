@@ -100,7 +100,6 @@ if uploaded_file:
             # Toon groepen per tijdsblok
             st.markdown("### 📅 Planning per groep")
             datum_vandaag = datetime.datetime.today().strftime("%d-%m-%Y")  # ✅ Alleen de datum
-            st.markdown(f"**Datum:** {datum_vandaag}")
 
             # Zoek "eigen pony" rij
             eigen_pony_rij = None
@@ -114,6 +113,8 @@ if uploaded_file:
 
             for blok in groepen_per_blok:
                 st.markdown("---")
+                st.markdown(f"<h3 style='text-align: center;'>📅 {datum_vandaag}</h3>", unsafe_allow_html=True)
+
                 cols = st.columns(len(blok))
                 for (col, tijd), container in zip(blok, cols):
                     max_rij = eigen_pony_rij if eigen_pony_rij else len(df)
@@ -145,7 +146,7 @@ if uploaded_file:
                             code += achternaam[:1].upper()
                         namen_counter[key] = namen_counter.get(key, 0) + 1
 
-                        locatie = "(B)" if pony in reeds_in_bak else "(S)"  # ✅ Nieuw: locatie
+                        locatie = "(B)" if pony in reeds_in_bak else "(S)"
                         kind_pony_combinaties.append((code, f"{pony.title()} {locatie}"))
                         reeds_in_bak.add(pony)
 
