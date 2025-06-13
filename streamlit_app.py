@@ -2,6 +2,16 @@ import streamlit as st
 import pandas as pd
 import datetime
 import re
+import locale
+
+# Stel Nederlandse taal in voor datumnotatie
+try:
+    locale.setlocale(locale.LC_TIME, 'nl_NL.UTF-8')
+except:
+    try:
+        locale.setlocale(locale.LC_TIME, 'nl_NL')
+    except:
+        pass
 
 st.set_page_config(page_title="Het Zesspan Ponyplanner", layout="wide")
 
@@ -77,27 +87,30 @@ if uploaded_file:
                         max_rij = i
                         break
 
+                # Zoek de rij met "juf" in ponynamen-kolom
+                for i in range(ponynamen_start_index, max_rij):
+                    waarde = str(df.iloc[i, ponynamen_kolom]).strip().lower()
+                    if waarde.startswith("juf"):
+                        juf = str(df.iloc[i, col]).strip().title()
+                        break
+
                 namen_counter = {}
 
                 for i in range(ponynamen_start_index, max_rij):
                     ponycel = str(df.iloc[i, ponynamen_kolom]) if i < len(df) else ""
                     naam = str(df.iloc[i, col]) if col in df.columns and i < len(df) else ""
 
-                    if re.match(r"(?i)^juf", ponycel.strip()):
-                        juf = naam.strip()
-                        continue
-
                     if not naam or naam.strip().lower() in ["", "nan", "x"]:
                         continue
 
-                    pony = ponycel
+                    pony = ponycel.strip().title()
                     delen = naam.strip().split()
-                    voornaam = delen[0] if delen else ""
+                    voornaam = delen[0].capitalize() if delen else ""
                     achternaam = ""
                     tussenvoegsels = {"van", "de", "der", "den", "ter", "ten", "het", "te"}
                     for deel in delen[1:]:
                         if deel.lower() not in tussenvoegsels:
-                            achternaam = deel
+                            achternaam = deel.capitalize()
                             break
                     code = voornaam
                     key = voornaam.lower()
