@@ -127,9 +127,8 @@ if uploaded_file:
             slides_data = []
 
             for blok in groepen_per_blok:
-                groep_tekst = ""
-                cols = st.columns(len(blok))
-                for i, ((col, tijd), container) in enumerate(zip(blok, cols)):
+                groepen = []
+                for i, (col, tijd) in enumerate(blok):
                     max_rij = eigen_pony_rij if eigen_pony_rij else len(df)
                     juf = str(df.iloc[eigen_pony_rij + 2, col]).strip().title() if eigen_pony_rij and pd.notna(df.iloc[eigen_pony_rij + 2, col]) else "onbekend"
 
@@ -161,37 +160,34 @@ if uploaded_file:
                         reeds_in_bak.add(pony)
 
                     kind_pony_combinaties.sort(key=lambda x: x[0].lower())
+                    groepen.append({
+                        "tijd": tijd,
+                        "juf": juf,
+                        "kinderen": kind_pony_combinaties
+                    })
 
-                    with container:
-                        st.markdown(f"<strong>Groep {tijd}</strong>", unsafe_allow_html=True)
-                        st.markdown(f"<strong>Juf:</strong> {juf}</strong>", unsafe_allow_html=True)
-                        groep_tekst += f"Groep {tijd} – Juf: {juf}\n"
-                        for naam, pony in kind_pony_combinaties:
-                            lijn = f"- {naam} – {pony}"
-                            groep_tekst += lijn + "\n"
-                            st.markdown(lijn)
+                # splitsen in slides van maximaal 3 groepen per slide
+                for i in range(0, len(groepen), 3):
+                    deel = groepen[i:i+3]
+                    groep_tekst = ""
+                    for groep in deel:
+                        groep_tekst += f"Groep {groep['tijd']} – Juf: {groep['juf']}\n"
+                        for naam, pony in groep['kinderen']:
+                            groep_tekst += f"- {naam} – {pony}\n"
+                        groep_tekst += "\n"
 
-                onder = st.session_state.ondertekst.strip()
-                if onder:
-                    stijl = ""
-                    if st.session_state.geel:
-                        stijl += "background-color:yellow; padding:4px; border-radius:4px;"
-                    if st.session_state.vet:
-                        stijl += "font-weight:bold;"
-                    st.markdown(
-                        f"<div style='text-align:center; margin-top:1.5em; {stijl}'>{onder}</div>",
-                        unsafe_allow_html=True
-                    )
-                    if st.session_state.geel:
-                        onder = f"[GEEL]{onder}[/GEEL]"
-                    if st.session_state.vet:
-                        onder = f"**{onder}**"
-                    groep_tekst += f"\n\n{onder}"
+                    onder = st.session_state.ondertekst.strip()
+                    if onder:
+                        if st.session_state.geel:
+                            onder = f"[GEEL]{onder}[/GEEL]"
+                        if st.session_state.vet:
+                            onder = f"**{onder}**"
+                        groep_tekst += f"{onder}\n"
 
-                slides_data.append({
-                    "title": f"Planning {datum_vandaag}",
-                    "content": groep_tekst.strip()
-                })
+                    slides_data.append({
+                        "title": f"Planning {datum_vandaag}",
+                        "content": groep_tekst.strip()
+                    })
 
             st.session_state["slides_data"] = slides_data
 
