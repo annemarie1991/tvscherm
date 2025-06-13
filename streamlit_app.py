@@ -82,13 +82,17 @@ if uploaded_file:
                 if hoofd_tijd in gebruikte_tijden:
                     continue
 
-                basis_tijd = datetime.datetime.strptime(hoofd_tijd.split('-')[0].strip(), "%H:%M")
+                basis_tijd_clean = re.sub(r"[–−]", "-", hoofd_tijd)
+                basis_tijd_clean = re.split(r"[-\s]", basis_tijd_clean)[0].strip()
+                basis_tijd = datetime.datetime.strptime(basis_tijd_clean, "%H:%M")
 
                 gekoppelde_tijden = []
                 gekoppelde_kolommen = []
 
                 for andere_tijd, andere_kol in tijd_lijst:
-                    test_tijd = datetime.datetime.strptime(andere_tijd.split('-')[0].strip(), "%H:%M")
+                    tijd_clean = re.sub(r"[–−]", "-", andere_tijd)
+                    tijd_clean = re.split(r"[-\s]", tijd_clean)[0].strip()
+                    test_tijd = datetime.datetime.strptime(tijd_clean, "%H:%M")
                     verschil = (test_tijd - basis_tijd).total_seconds() / 60
                     if 0 <= verschil <= 30:
                         gekoppelde_tijden.append(andere_tijd)
