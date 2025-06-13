@@ -186,9 +186,18 @@ for sleutel, tekst in st.session_state.pony_opmerkingen.items():
         opmerking = f" ({tekst})"
         break
 
+# Zoek opmerking bij deze pony (ook bijv. Pare → Parellientje)
+opmerking = ""
+for sleutel, tekst in st.session_state.pony_opmerkingen.items():
+    if sleutel.lower() in pony.lower():
+        opmerking = f" ({tekst})"
+        break
+
 locatie = "(B)" if pony in reeds_in_bak else "(S)"
 pony_tekst = f"{pony.title()} {locatie}{opmerking}"
 kind_pony_combinaties.append((code, pony_tekst))
+reeds_in_bak.add(pony)
+
 
                         reeds_in_bak.add(pony)
 
