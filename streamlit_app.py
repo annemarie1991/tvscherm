@@ -64,10 +64,11 @@ if uploaded_file:
                     tijd_dict[col] = cel.strip()
 
             # groepeer kolommen per tijdsblok (30 min)
-            tijd_items = sorted(
-                tijd_dict.items(),
-                key=lambda x: datetime.datetime.strptime(re.split(r"[-\s]", x[1])[0], "%H:%M")
-            )
+           tijd_items = sorted(
+    tijd_dict.items(),
+    key=lambda x: datetime.datetime.strptime(re.split(r"[-\s]", x[0])[0], "%H:%M")
+)
+
 
             groepen_per_blok = []
             huidige_blok = []
