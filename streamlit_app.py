@@ -143,8 +143,26 @@ if uploaded_file:
                             code += achternaam[:1].upper()
                         namen_counter[key] = namen_counter.get(key, 0) + 1
 
-                        locatie = "(B)" if pony in reeds_in_bak else "(S)"
-                        kind_pony_combinaties.append((code, f"{pony.title()} {locatie}"))
+# Laad opmerkingen als dit nog niet gedaan is
+if "pony_opmerkingen" not in st.session_state:
+    import json
+    op_pad = Path("pony_opmerkingen.json")
+    if op_pad.exists():
+        with op_pad.open("r", encoding="utf-8") as f:
+            st.session_state.pony_opmerkingen = json.load(f)
+    else:
+        st.session_state.pony_opmerkingen = {}
+
+opmerking = ""
+for sleutel, tekst in st.session_state.pony_opmerkingen.items():
+    if sleutel.lower() in pony.lower():
+        opmerking = f" ({tekst})"
+        break
+
+locatie = "(B)" if pony in reeds_in_bak else "(S)"
+pony_tekst = f"{pony.title()} {locatie}{opmerking}"
+kind_pony_combinaties.append((code, pony_tekst))
+
                         reeds_in_bak.add(pony)
 
                     kind_pony_combinaties.sort(key=lambda x: x[0].lower())
