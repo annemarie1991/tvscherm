@@ -94,8 +94,7 @@ def upload_to_slides():
 
                 content = f"**{col['tijd']}**\n**Juf: {col['juf']}**\n\n"
                 for kind, pony in col["kinderen"]:
-                    opm = pony_opmerking(pony)
-                    content += f"{kind} – {pony}{opm}\n"
+                    content += f"{kind} – {pony}\n"
 
                 textbox_id = f"textbox_{uuid.uuid4().hex[:8]}"
                 requests.append({
