@@ -10,7 +10,7 @@ def upload_to_slides():
     try:
         st.info("Uploaden naar Google Slides gestart...")
 
-        # 👉 Haal credentials op uit st.secrets
+        # Haal credentials op uit Streamlit secrets
         creds_dict = st.secrets["google_service_account"]
         creds = service_account.Credentials.from_service_account_info(
             creds_dict,
@@ -19,7 +19,7 @@ def upload_to_slides():
 
         service = build("slides", "v1", credentials=creds)
 
-        # Verwijder alle bestaande slides behalve de eerste (titel)
+        # Verwijder alle bestaande slides behalve de eerste
         presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
         slide_ids = [slide["objectId"] for slide in presentation.get("slides", [])[1:]]
         delete_requests = [{"deleteObject": {"objectId": sid}} for sid in slide_ids]
@@ -32,50 +32,61 @@ def upload_to_slides():
         # Voeg nieuwe slides toe
         for i, blok in enumerate(st.session_state.get("slides_data", []), start=1):
             slide_id = f"slide_{i}"
+            title_id = f"title_{i}"
+            content_id = f"content_{i}"
+
             requests = [
-                {"createSlide": {"objectId": slide_id, "insertionIndex": i, "slideLayoutReference": {"predefinedLayout": "BLANK"}}},
-                {"createShape": {
-                    "objectId": f"title_{i}",
-                    "shapeType": "TEXT_BOX",
-                    "elementProperties": {
-                        "pageObjectId": slide_id,
-                        "size": {"height": {"magnitude": 100, "unit": "PT"}, "width": {"magnitude": 500, "unit": "PT"}},
-                        "transform": {
-                            "scaleX": 1, "scaleY": 1, "translateX": 50, "translateY": 20, "unit": "PT"
-                        }
-                    },
-                    "text": {
-                        "textElements": [
-                            {
-                                "textRun": {
-                                    "content": blok["title"] + "\n",
-                                    "style": {"bold": True, "fontSize": {"magnitude": 24, "unit": "PT"}}
-                                }
-                            }
-                        ]
+                {
+                    "createSlide": {
+                        "objectId": slide_id,
+                        "insertionIndex": i,
+                        "slideLayoutReference": {"predefinedLayout": "BLANK"}
                     }
-                }},
-                {"createShape": {
-                    "objectId": f"content_{i}",
-                    "shapeType": "TEXT_BOX",
-                    "elementProperties": {
-                        "pageObjectId": slide_id,
-                        "size": {"height": {"magnitude": 400, "unit": "PT"}, "width": {"magnitude": 600, "unit": "PT"}},
-                        "transform": {
-                            "scaleX": 1, "scaleY": 1, "translateX": 50, "translateY": 130, "unit": "PT"
-                        }
-                    },
-                    "text": {
-                        "textElements": [
-                            {
-                                "textRun": {
-                                    "content": blok["content"],
-                                    "style": {"fontSize": {"magnitude": 16, "unit": "PT"}}
-                                }
+                },
+                {
+                    "createShape": {
+                        "objectId": title_id,
+                        "shapeType": "TEXT_BOX",
+                        "elementProperties": {
+                            "pageObjectId": slide_id,
+                            "size": {"height": {"magnitude": 100, "unit": "PT"}, "width": {"magnitude": 500, "unit": "PT"}},
+                            "transform": {
+                                "scaleX": 1, "scaleY": 1,
+                                "translateX": 50, "translateY": 20,
+                                "unit": "PT"
                             }
-                        ]
+                        }
                     }
-                }}
+                },
+                {
+                    "insertText": {
+                        "objectId": title_id,
+                        "insertionIndex": 0,
+                        "text": blok["title"]
+                    }
+                },
+                {
+                    "createShape": {
+                        "objectId": content_id,
+                        "shapeType": "TEXT_BOX",
+                        "elementProperties": {
+                            "pageObjectId": slide_id,
+                            "size": {"height": {"magnitude": 400, "unit": "PT"}, "width": {"magnitude": 600, "unit": "PT"}},
+                            "transform": {
+                                "scaleX": 1, "scaleY": 1,
+                                "translateX": 50, "translateY": 130,
+                                "unit": "PT"
+                            }
+                        }
+                    }
+                },
+                {
+                    "insertText": {
+                        "objectId": content_id,
+                        "insertionIndex": 0,
+                        "text": blok["content"]
+                    }
+                }
             ]
 
             service.presentations().batchUpdate(
@@ -83,7 +94,8 @@ def upload_to_slides():
                 body={"requests": requests}
             ).execute()
 
-        st.success("Succesvol geüpload naar Google Slides!")
+        st.success("✅ Succesvol geüpload naar Google Slides!")
+
     except HttpError as error:
         st.error(f"Fout bij Google Slides API: {error}")
     except Exception as e:
