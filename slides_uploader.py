@@ -57,9 +57,12 @@ def upload_to_slides():
         return
 
     try:
-        credentials = service_account.Credentials.from_service_account_file(
-            SERVICE_ACCOUNT_FILE, scopes=SCOPES
-        )
+        import google.auth
+
+credentials = service_account.Credentials.from_service_account_info(
+    st.secrets["gcp_service_account"], scopes=SCOPES
+)
+
         service = build('slides', 'v1', credentials=credentials)
 
         presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
