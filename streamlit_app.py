@@ -136,7 +136,10 @@ if uploaded_file:
 
             for blok in groepen_per_blok:
                 st.markdown("---")
+
                 midden_index = len(blok) // 2
+                st.markdown(f"<div style='text-align:center; margin-top:1em; font-weight:bold;'>{datum_vandaag}</div>", unsafe_allow_html=True)
+
                 cols = st.columns(len(blok))
                 for i, ((col, tijd), container) in enumerate(zip(blok, cols)):
                     max_rij = eigen_pony_rij if eigen_pony_rij else len(df)
@@ -180,19 +183,17 @@ if uploaded_file:
                         for naam, pony in kind_pony_combinaties:
                             st.markdown(f"- {naam} – {pony}")
 
-                        if i == midden_index:
-                            st.markdown(f"<div style='text-align:center; margin-top:1em; font-weight:bold;'>{datum_vandaag}</div>", unsafe_allow_html=True)
+                if st.session_state.ondertekst:
+                    stijl = ""
+                    if st.session_state.geel:
+                        stijl += "background-color:yellow; padding:4px; border-radius:4px;"
+                    if st.session_state.vet:
+                        stijl += "font-weight:bold;"
+                    st.markdown(
+                        f"<div style='text-align:center; margin-top:1.5em; {stijl}'>{st.session_state.ondertekst}</div>",
+                        unsafe_allow_html=True
+                    )
 
-                        if st.session_state.ondertekst:
-                            stijl = ""
-                            if st.session_state.geel:
-                                stijl += "background-color:yellow; padding:4px; border-radius:4px;"
-                            if st.session_state.vet:
-                                stijl += "font-weight:bold;"
-                            st.markdown(
-                                f"<div style='text-align:center; margin-top:1.5em; {stijl}'>{st.session_state.ondertekst}</div>",
-                                unsafe_allow_html=True
-                            )
         else:
             st.warning("Kon geen rij met lestijden vinden.")
     else:
