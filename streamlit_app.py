@@ -3,21 +3,8 @@ import pandas as pd
 import datetime
 import re
 import locale
-import os
-import json
 
-# Pad voor notitie-opslag
-notes_path = "/mnt/data/ponyplanner_notitie.json"
-notitie_standaard = {"text": "", "bold": False, "highlight": False}
-
-# Notitie laden
-if os.path.exists(notes_path):
-    with open(notes_path, "r") as f:
-        opgeslagen_notitie = json.load(f)
-else:
-    opgeslagen_notitie = notitie_standaard
-
-# Nederlandse datum
+# Nederlandse datuminstelling
 try:
     locale.setlocale(locale.LC_TIME, 'nl_NL.UTF-8')
 except:
@@ -34,25 +21,24 @@ Upload hieronder het Excel-bestand met de planning. Kies daarna het juiste tabbl
 De app herkent automatisch de ponynamen, lestijden, kindernamen (geanonimiseerd) en juffen.
 """)
 
-# 🟨 Notitiebeheer (boven de uploader)
-st.markdown("---")
-st.markdown("### 📌 Instellingen voor ondertekst")
+# 📝 Laad opgeslagen tekst uit session_state
+if "ondertekst" not in st.session_state:
+    st.session_state.ondertekst = ""
+if "vet" not in st.session_state:
+    st.session_state.vet = False
+if "geel" not in st.session_state:
+    st.session_state.geel = False
 
-with st.form("notitie_form"):
-    tekst = st.text_input("Notitie voor onderaan iedere sectie:", value=opgeslagen_notitie.get("text", ""))
-    col1, col2 = st.columns(2)
-    bold = col1.checkbox("Dikgedrukt", value=opgeslagen_notitie.get("bold", False))
-    highlight = col2.checkbox("Geel gemarkeerd", value=opgeslagen_notitie.get("highlight", False))
-    opgeslagen = st.form_submit_button("🔖 Opslaan")
-
-if opgeslagen:
-    opgeslagen_notitie = {"text": tekst, "bold": bold, "highlight": highlight}
-    os.makedirs(os.path.dirname(notes_path), exist_ok=True)
-    with open(notes_path, "w") as f:
-        json.dump(opgeslagen_notitie, f)
-    st.success("Opgeslagen! Herlaad de pagina om verder te gaan.")
-
-st.markdown("---")
+# 📌 Ondertekst instellingen
+st.sidebar.header("📝 Ondertekst instellen")
+nieuwe_tekst = st.sidebar.text_area("Tekst onderaan elke sectie", st.session_state.ondertekst)
+vet = st.sidebar.checkbox("Dikgedrukt", value=st.session_state.vet)
+geel = st.sidebar.checkbox("Geel markeren", value=st.session_state.geel)
+if st.sidebar.button("💾 Opslaan"):
+    st.session_state.ondertekst = nieuwe_tekst
+    st.session_state.vet = vet
+    st.session_state.geel = geel
+    st.sidebar.success("Tekst opgeslagen!")
 
 uploaded_file = st.file_uploader("📄 Upload je Excel-bestand", type=["xlsx"])
 
@@ -82,7 +68,7 @@ if uploaded_file:
 
     if ponynamen_kolom is not None:
         tijdrij = None
-        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-\u2013\u2212]\s*\d{1,2}:\d{2})?\b")
+        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-–−]\s*\d{1,2}:\d{2})?\b")
         for i in range(0, 5):
             if any(tijd_pattern.search(str(cell)) for cell in df.iloc[i]):
                 tijdrij = i
@@ -127,7 +113,7 @@ if uploaded_file:
             if huidige_blok:
                 groepen_per_blok.append(huidige_blok)
 
-            st.markdown("### 🗓️ Planning per groep")
+            st.markdown("### 📅 Planning per groep")
 
             datum_vandaag = datetime.datetime.today().strftime("%d-%m-%Y")
 
@@ -142,10 +128,9 @@ if uploaded_file:
 
             for blok in groepen_per_blok:
                 st.markdown("---")
-                st.markdown(f"<div style='text-align: center; font-size: 20px;'><strong>{datum_vandaag}</strong></div>", unsafe_allow_html=True)
+                midden_index = len(blok) // 2
                 cols = st.columns(len(blok))
-
-                for (col, tijd), container in zip(blok, cols):
+                for i, ((col, tijd), container) in enumerate(zip(blok, cols)):
                     max_rij = eigen_pony_rij if eigen_pony_rij else len(df)
                     juf = "onbekend"
                     if eigen_pony_rij is not None and eigen_pony_rij + 2 < len(df):
@@ -186,15 +171,20 @@ if uploaded_file:
                         st.markdown(f"<strong>Juf:</strong> {juf}</strong>", unsafe_allow_html=True)
                         for naam, pony in kind_pony_combinaties:
                             st.markdown(f"- {naam} – {pony}")
-
-                # Ondertekst weergeven
-                if opgeslagen_notitie["text"]:
-                    stijl = "text-align: center;"
-                    if opgeslagen_notitie["highlight"]:
-                        stijl += " background-color: yellow;"
-                    if opgeslagen_notitie["bold"]:
-                        opgeslagen_notitie["text"] = f"<strong>{opgeslagen_notitie['text']}</strong>"
-                    st.markdown(f"<div style='{stijl} margin-top: 10px;'>{opgeslagen_notitie['text']}</div>", unsafe_allow_html=True)
+                        # 👇 Toon de datum in het midden
+                        if i == midden_index:
+                            st.markdown(f"<div style='text-align:center; margin-top:1em; font-weight:bold;'>{datum_vandaag}</div>", unsafe_allow_html=True)
+                        # 👇 Toon ondertekst onderaan
+                        if st.session_state.ondertekst:
+                            stijl = ""
+                            if st.session_state.geel:
+                                stijl += "background-color:yellow; padding:4px; border-radius:4px;"
+                            if st.session_state.vet:
+                                stijl += "font-weight:bold;"
+                            st.markdown(
+                                f"<div style='text-align:center; margin-top:1.5em; {stijl}'>{st.session_state.ondertekst}</div>",
+                                unsafe_allow_html=True
+                            )
 
         else:
             st.warning("Kon geen rij met lestijden vinden.")
