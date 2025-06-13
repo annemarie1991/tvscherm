@@ -13,6 +13,33 @@ except:
         locale.setlocale(locale.LC_TIME, 'nl_NL')
     except:
         pass
+        
+# Pagina voor pony-opmerkingen toevoegen
+pony_opmerkingen_pad = Path("pony_opmerkingen.json")
+
+if "pony_opmerkingen" not in st.session_state:
+    import json
+    if pony_opmerkingen_pad.exists():
+        with pony_opmerkingen_pad.open("r", encoding="utf-8") as f:
+            st.session_state.pony_opmerkingen = json.load(f)
+    else:
+        st.session_state.pony_opmerkingen = {}
+
+if st.sidebar.checkbox("✏️ Pony-opmerkingen beheren"):
+    st.sidebar.markdown("Voeg hier opmerkingen toe aan pony's. Opmerkingen worden getoond in de planning.")
+    nieuwe_pony = st.sidebar.text_input("Pony-naam (of deel van naam)")
+    nieuwe_opmerking = st.sidebar.text_input("Opmerking bij deze pony")
+    if st.sidebar.button("➕ Opslaan/aanpassen"):
+        if nieuwe_pony.strip():
+            st.session_state.pony_opmerkingen[nieuwe_pony.strip()] = nieuwe_opmerking.strip()
+            with pony_opmerkingen_pad.open("w", encoding="utf-8") as f:
+                json.dump(st.session_state.pony_opmerkingen, f, ensure_ascii=False, indent=2)
+            st.sidebar.success("Opmerking opgeslagen!")
+
+    if st.session_state.pony_opmerkingen:
+        st.sidebar.markdown("### 📋 Huidige opmerkingen")
+        for naam, opm in st.session_state.pony_opmerkingen.items():
+            st.sidebar.markdown(f"- **{naam}**: {opm}")
 
 st.set_page_config(page_title="Het Zesspan TV Scherm", layout="wide")
 st.title("🏄 Het Zesspan TV Scherm")
