@@ -4,6 +4,10 @@ import datetime
 import re
 import locale
 from pathlib import Path
+import json
+import google.auth
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 
 # Nederlandse datuminstelling
 try:
@@ -14,6 +18,7 @@ except:
     except:
         pass
 
+# App configuratie
 st.set_page_config(page_title="Het Zesspan Ponyplanner", layout="wide")
 st.title("🐴 Het Zesspan Ponyplanner")
 
@@ -22,10 +27,7 @@ Upload hieronder het Excel-bestand met de planning. Kies daarna het juiste tabbl
 De app herkent automatisch de ponynamen, lestijden, kindernamen (geanonimiseerd) en juffen.
 """)
 
-# 📁 Pad naar lokaal bestand
 tekstpad = Path("ondertekst.txt")
-
-# 📌 Ondertekst: laden uit bestand of session_state
 if "ondertekst" not in st.session_state:
     if tekstpad.exists():
         regels = tekstpad.read_text(encoding="utf-8").split("\n")
@@ -37,7 +39,6 @@ if "ondertekst" not in st.session_state:
         st.session_state.vet = False
         st.session_state.geel = False
 
-# 📌 Ondertekst instellingen
 st.sidebar.header("📝 Ondertekst instellen")
 nieuwe_tekst = st.sidebar.text_area("Tekst onderaan elke sectie", st.session_state.ondertekst)
 vet = st.sidebar.checkbox("Dikgedrukt", value=st.session_state.vet)
@@ -57,8 +58,7 @@ if uploaded_file:
     df = pd.read_excel(xls, sheet_name=sheet, header=None)
     st.dataframe(df.head(20))
 
-    ponynamen_kolom = None
-    ponynamen_start_index = 0
+    ponynamen_kolom, ponynamen_start_index = None, 0
     for col in df.columns:
         telling, start_index = 0, None
         for idx, value in df[col].dropna().astype(str).items():
@@ -76,41 +76,20 @@ if uploaded_file:
             break
 
     if ponynamen_kolom is not None:
-        tijdrij = None
-        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-–−]\s*\d{1,2}:\d{2})?\b")
+        tijdrij, tijd_pattern = None, re.compile(r"\b\d{1,2}:\d{2}(\s*[-–−]\s*\d{1,2}:\d{2})?\b")
         for i in range(0, 5):
             if any(tijd_pattern.search(str(cell)) for cell in df.iloc[i]):
                 tijdrij = i
                 break
 
         if tijdrij is not None:
-            tijd_dict = {}
-            for col in df.columns:
-                cel = str(df.iloc[tijdrij, col])
-                if tijd_pattern.match(cel):
-                    tijd_dict[col] = cel.strip()
+            tijd_dict = {col: str(df.iloc[tijdrij, col]).strip() for col in df.columns if tijd_pattern.match(str(df.iloc[tijdrij, col]))}
+            tijd_items = sorted(tijd_dict.items(), key=lambda x: datetime.datetime.strptime(re.search(r"\d{1,2}:\d{2}", x[1]).group(), "%H:%M"))
 
-            tijd_items = sorted(
-                tijd_dict.items(),
-                key=lambda x: datetime.datetime.strptime(
-                    re.search(r"\d{1,2}:\d{2}", x[1]).group(), "%H:%M"
-                )
-            )
-
-            groepen_per_blok = []
-            huidige_blok = []
-            laatst_verwerkte_tijd = None
-
+            groepen_per_blok, huidige_blok, laatst_verwerkte_tijd = [], [], None
             for col, tijd in tijd_items:
-                tijd_clean_match = re.search(r"\d{1,2}:\d{2}", tijd)
-                if not tijd_clean_match:
-                    continue
-                tijd_clean = tijd_clean_match.group()
-                try:
-                    tijd_dt = datetime.datetime.strptime(tijd_clean, "%H:%M")
-                except ValueError:
-                    continue
-
+                tijd_clean = re.search(r"\d{1,2}:\d{2}", tijd).group()
+                tijd_dt = datetime.datetime.strptime(tijd_clean, "%H:%M")
                 if laatst_verwerkte_tijd is None or (tijd_dt - laatst_verwerkte_tijd).total_seconds() > 30 * 60:
                     if huidige_blok:
                         groepen_per_blok.append(huidige_blok)
@@ -118,85 +97,56 @@ if uploaded_file:
                     laatst_verwerkte_tijd = tijd_dt
                 else:
                     huidige_blok.append((col, tijd))
-
             if huidige_blok:
                 groepen_per_blok.append(huidige_blok)
 
-            st.markdown("### 📅 Planning per groep")
             datum_vandaag = datetime.datetime.today().strftime("%d-%m-%Y")
-
-            eigen_pony_rij = None
-            for r in range(ponynamen_start_index, len(df)):
-                waarde = str(df.iloc[r, ponynamen_kolom]).strip().lower()
-                if "eigen pony" in waarde:
-                    eigen_pony_rij = r
-                    break
-
-            reeds_in_bak = set()
+            eigen_pony_rij = next((r for r in range(ponynamen_start_index, len(df)) if "eigen pony" in str(df.iloc[r, ponynamen_kolom]).strip().lower()), None)
+            reeds_in_bak, output_for_slides = set(), []
 
             for blok in groepen_per_blok:
-                st.markdown("---")
-
-                midden_index = len(blok) // 2
-                st.markdown(f"<div style='text-align:center; margin-top:1em; font-weight:bold;'>{datum_vandaag}</div>", unsafe_allow_html=True)
-
-                cols = st.columns(len(blok))
-                for i, ((col, tijd), container) in enumerate(zip(blok, cols)):
+                groep_markdown = [f"<div style='text-align:center; font-weight:bold; font-size:18px'>{datum_vandaag}</div>", "<br><div style='display:flex; gap:20px;'>"]
+                for col, tijd in blok:
+                    juf = str(df.iloc[eigen_pony_rij + 2, col]).strip().title() if eigen_pony_rij is not None and eigen_pony_rij + 2 < len(df) else "onbekend"
+                    kind_pony_combinaties, namen_counter = [], {}
                     max_rij = eigen_pony_rij if eigen_pony_rij else len(df)
-                    juf = "onbekend"
-                    if eigen_pony_rij is not None and eigen_pony_rij + 2 < len(df):
-                        jufcel = df.iloc[eigen_pony_rij + 2, col]
-                        juf = str(jufcel).strip().title() if pd.notna(jufcel) else "onbekend"
-
-                    kind_pony_combinaties = []
-                    namen_counter = {}
-
                     for r in range(ponynamen_start_index, max_rij):
-                        naam = str(df.iloc[r, col]) if r < len(df) else ""
-                        pony = str(df.iloc[r, ponynamen_kolom]) if r < len(df) else ""
-                        if not naam or naam.strip().lower() in ["", "nan", "x"]:
+                        naam = str(df.iloc[r, col])
+                        pony = str(df.iloc[r, ponynamen_kolom])
+                        if naam.lower() in ["", "nan", "x"]:
                             continue
-
                         delen = naam.strip().split()
                         voornaam = delen[0].capitalize() if delen else ""
-                        achternaam = ""
-                        tussenvoegsels = {"van", "de", "der", "den", "ter", "ten", "het", "te"}
-                        for deel in delen[1:]:
-                            if deel.lower() not in tussenvoegsels:
-                                achternaam = deel.capitalize()
-                                break
-                        code = voornaam
-                        key = voornaam.lower()
-                        if key in namen_counter:
-                            code += achternaam[:1].upper()
-                        namen_counter[key] = namen_counter.get(key, 0) + 1
-
+                        achternaam = next((d.capitalize() for d in delen[1:] if d.lower() not in {"van", "de", "der", "den", "ter", "ten", "het", "te"}), "")
+                        code = voornaam + (achternaam[:1].upper() if voornaam.lower() in namen_counter else "")
+                        namen_counter[voornaam.lower()] = namen_counter.get(voornaam.lower(), 0) + 1
                         locatie = "(B)" if pony in reeds_in_bak else "(S)"
                         kind_pony_combinaties.append((code, f"{pony.title()} {locatie}"))
                         reeds_in_bak.add(pony)
-
                     kind_pony_combinaties.sort(key=lambda x: x[0].lower())
-
-                    with container:
-                        st.markdown(f"<strong>Groep {tijd}</strong>", unsafe_allow_html=True)
-                        st.markdown(f"<strong>Juf:</strong> {juf}</strong>", unsafe_allow_html=True)
-                        for naam, pony in kind_pony_combinaties:
-                            st.markdown(f"- {naam} – {pony}")
-
+                    groep_markdown.append("<div><strong>Groep {}<br>Juf: {}</strong><br>{}</div>".format(
+                        tijd,
+                        juf,
+                        "<br>".join(f"{n} – {p}" for n, p in kind_pony_combinaties)
+                    ))
+                groep_markdown.append("</div>")
                 if st.session_state.ondertekst:
                     stijl = ""
                     if st.session_state.geel:
                         stijl += "background-color:yellow; padding:4px; border-radius:4px;"
                     if st.session_state.vet:
                         stijl += "font-weight:bold;"
-                    st.markdown(
-                        f"<div style='text-align:center; margin-top:1.5em; {stijl}'>{st.session_state.ondertekst}</div>",
-                        unsafe_allow_html=True
-                    )
+                    groep_markdown.append(f"<div style='text-align:center; margin-top:1em; {stijl}'>{st.session_state.ondertekst}</div>")
 
-        else:
-            st.warning("Kon geen rij met lestijden vinden.")
-    else:
-        st.warning("Kon geen kolom met >60 ponynamen vinden.")
-else:
-    st.info("Upload eerst een Excel-bestand om verder te gaan.")
+                sectie_html = "\n".join(groep_markdown)
+                st.markdown("<hr>" + sectie_html, unsafe_allow_html=True)
+                output_for_slides.append(sectie_html)
+
+            st.session_state["slides_output"] = output_for_slides
+
+            # Upload knop naar Google Slides
+            if st.button("📤 Upload naar (online) scherm"):
+                from slides_uploader import upload_to_slides
+                presentation_id = "1uhfZtV-ota0vNrmQyLi6hmxRMvkuo1qM"
+                upload_to_slides(presentation_id, st.session_state["slides_output"])
+                st.success("De planning is geüpload naar het online scherm!")
