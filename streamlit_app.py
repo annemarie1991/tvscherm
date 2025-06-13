@@ -4,6 +4,7 @@ import datetime
 import re
 import locale
 
+# Nederlandse datum
 try:
     locale.setlocale(locale.LC_TIME, 'nl_NL.UTF-8')
 except:
@@ -64,11 +65,10 @@ if uploaded_file:
                     tijd_dict[col] = cel.strip()
 
             # groepeer kolommen per tijdsblok (30 min)
-           tijd_items = sorted(
-    tijd_dict.items(),
-    key=lambda x: datetime.datetime.strptime(re.split(r"[-\s]", x[0])[0], "%H:%M")
-)
-
+            tijd_items = sorted(
+                tijd_dict.items(),
+                key=lambda x: datetime.datetime.strptime(re.split(r"[-\s]", x[1])[0], "%H:%M")
+            )
 
             groepen_per_blok = []
             huidige_blok = []
@@ -110,7 +110,11 @@ if uploaded_file:
                 cols = st.columns(len(blok))
                 for (col, tijd), container in zip(blok, cols):
                     max_rij = eigen_pony_rij if eigen_pony_rij else len(df)
-                    juf = str(df.iloc[eigen_pony_rij + 2, col]).strip().title() if eigen_pony_rij else "onbekend"
+                    juf = "onbekend"
+                    if eigen_pony_rij is not None and eigen_pony_rij + 2 < len(df):
+                        jufcel = df.iloc[eigen_pony_rij + 2, col]
+                        juf = str(jufcel).strip().title() if pd.notna(jufcel) else "onbekend"
+
                     kind_pony_combinaties = []
                     namen_counter = {}
 
@@ -139,7 +143,7 @@ if uploaded_file:
 
                     with container:
                         st.markdown(f"<strong>Groep {tijd}</strong>", unsafe_allow_html=True)
-                        st.markdown(f"<strong>Juf:</strong> {juf}", unsafe_allow_html=True)
+                        st.markdown(f"<strong>Juf:</strong> {juf}</strong>", unsafe_allow_html=True)
                         for naam, pony in kind_pony_combinaties:
                             st.markdown(f"- {naam} – {pony}")
         else:
