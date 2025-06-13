@@ -5,26 +5,18 @@ import re
 import locale
 from pathlib import Path
 from slides_uploader import upload_to_slides
+import json
 
-try:
-    locale.setlocale(locale.LC_TIME, 'nl_NL.UTF-8')
-except:
-    try:
-        locale.setlocale(locale.LC_TIME, 'nl_NL')
-    except:
-        pass
-        
-# Pagina voor pony-opmerkingen toevoegen
+# 👉 Pony-opmerkingen initialiseren
 pony_opmerkingen_pad = Path("pony_opmerkingen.json")
-
 if "pony_opmerkingen" not in st.session_state:
-    import json
     if pony_opmerkingen_pad.exists():
         with pony_opmerkingen_pad.open("r", encoding="utf-8") as f:
             st.session_state.pony_opmerkingen = json.load(f)
     else:
         st.session_state.pony_opmerkingen = {}
 
+# 👉 Pony-opmerkingen beheren in de zijbalk
 if st.sidebar.checkbox("✏️ Pony-opmerkingen beheren"):
     st.sidebar.markdown("Voeg hier opmerkingen toe aan pony's. Opmerkingen worden getoond in de planning.")
     nieuwe_pony = st.sidebar.text_input("Pony-naam (of deel van naam)")
@@ -40,6 +32,15 @@ if st.sidebar.checkbox("✏️ Pony-opmerkingen beheren"):
         st.sidebar.markdown("### 📋 Huidige opmerkingen")
         for naam, opm in st.session_state.pony_opmerkingen.items():
             st.sidebar.markdown(f"- **{naam}**: {opm}")
+
+# 👉 Basisinstellingen
+try:
+    locale.setlocale(locale.LC_TIME, 'nl_NL.UTF-8')
+except:
+    try:
+        locale.setlocale(locale.LC_TIME, 'nl_NL')
+    except:
+        pass
 
 st.set_page_config(page_title="Het Zesspan TV Scherm", layout="wide")
 st.title("🏄 Het Zesspan TV Scherm")
@@ -170,35 +171,16 @@ if uploaded_file:
                             code += achternaam[:1].upper()
                         namen_counter[key] = namen_counter.get(key, 0) + 1
 
-# Laad opmerkingen als dit nog niet gedaan is
-if "pony_opmerkingen" not in st.session_state:
-    import json
-    op_pad = Path("pony_opmerkingen.json")
-    if op_pad.exists():
-        with op_pad.open("r", encoding="utf-8") as f:
-            st.session_state.pony_opmerkingen = json.load(f)
-    else:
-        st.session_state.pony_opmerkingen = {}
+                        # Zoek opmerking bij deze pony
+                        opmerking = ""
+                        for sleutel, tekst in st.session_state.pony_opmerkingen.items():
+                            if sleutel.lower() in pony.lower():
+                                opmerking = f" ({tekst})"
+                                break
 
-opmerking = ""
-for sleutel, tekst in st.session_state.pony_opmerkingen.items():
-    if sleutel.lower() in pony.lower():
-        opmerking = f" ({tekst})"
-        break
-
-# Zoek opmerking bij deze pony (ook bijv. Pare → Parellientje)
-opmerking = ""
-for sleutel, tekst in st.session_state.pony_opmerkingen.items():
-    if sleutel.lower() in pony.lower():
-        opmerking = f" ({tekst})"
-        break
-
-locatie = "(B)" if pony in reeds_in_bak else "(S)"
-pony_tekst = f"{pony.title()} {locatie}{opmerking}"
-kind_pony_combinaties.append((code, pony_tekst))
-reeds_in_bak.add(pony)
-
-
+                        locatie = "(B)" if pony in reeds_in_bak else "(S)"
+                        pony_tekst = f"{pony.title()} {locatie}{opmerking}"
+                        kind_pony_combinaties.append((code, pony_tekst))
                         reeds_in_bak.add(pony)
 
                     kind_pony_combinaties.sort(key=lambda x: x[0].lower())
@@ -231,7 +213,7 @@ reeds_in_bak.add(pony)
                 for i, coldata in enumerate(blok["columns"]):
                     with cols[i]:
                         st.markdown(f"**{coldata['tijd']}**")
-                        st.markdown(f"Juf: {coldata['juf']}")
+                        st.markdown(f"**Juf: {coldata['juf']}**")
                         for kind, pony in coldata["kinderen"]:
                             st.markdown(f"{kind} – {pony}")
                 if blok.get("ondertekst"):
