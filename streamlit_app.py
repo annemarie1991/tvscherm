@@ -1,13 +1,11 @@
-# Nieuwe versie van streamlit_app.py
 import streamlit as st
 import pandas as pd
 import datetime
 import re
 import locale
 from pathlib import Path
-from slides_uploader import upload_to_slides  # dit bestand moet je ook zo aanpassen
+from slides_uploader import upload_to_slides
 
-# Nederlandse datuminstelling
 try:
     locale.setlocale(locale.LC_TIME, 'nl_NL.UTF-8')
 except:
@@ -17,11 +15,9 @@ except:
         pass
 
 st.set_page_config(page_title="Het Zesspan TV Scherm", layout="wide")
-st.title("\U0001F3C4 Het Zesspan TV Scherm")
+st.title("🏄 Het Zesspan TV Scherm")
 
 tekstpad = Path("ondertekst.txt")
-
-# Ondertekst laden
 if "ondertekst" not in st.session_state:
     if tekstpad.exists():
         regels = tekstpad.read_text(encoding="utf-8").split("\n")
@@ -33,32 +29,27 @@ if "ondertekst" not in st.session_state:
         st.session_state.vet = False
         st.session_state.geel = False
 
-# Sidebar instellingen
-st.sidebar.header("\U0001F4DD Ondertekst instellen")
+st.sidebar.header("📝 Ondertekst instellen")
 nieuwe_tekst = st.sidebar.text_area("Tekst onderaan elke sectie", st.session_state.ondertekst or "")
 vet = st.sidebar.checkbox("Dikgedrukt", value=st.session_state.vet)
 geel = st.sidebar.checkbox("Geel markeren", value=st.session_state.geel)
-if st.sidebar.button("\U0001F4C2 Opslaan"):
+if st.sidebar.button("📂 Opslaan"):
     st.session_state.ondertekst = nieuwe_tekst
     st.session_state.vet = vet
     st.session_state.geel = geel
     tekstpad.write_text(f"{nieuwe_tekst}\n{vet}\n{geel}", encoding="utf-8")
     st.sidebar.success("Tekst opgeslagen!")
 
-# Upload knop
-if st.button("\U0001F4E4 Upload naar (online) scherm"):
+if st.button("📤 Upload naar (online) scherm"):
     upload_to_slides()
 
-st.markdown("""
-Upload hieronder het Excel-bestand met de planning. Kies daarna het juiste tabblad.
-De app herkent automatisch de ponynamen, lestijden, kindernamen (geanonimiseerd) en juffen.
-""")
+st.markdown("Upload hieronder het Excel-bestand met de planning. Kies daarna het juiste tabblad.")
 
-uploaded_file = st.file_uploader("\U0001F4C4 Upload je Excel-bestand", type=["xlsx"])
+uploaded_file = st.file_uploader("📄 Upload je Excel-bestand", type=["xlsx"])
 
 if uploaded_file:
     xls = pd.ExcelFile(uploaded_file)
-    sheet = st.selectbox("\U0001F4DC Kies een tabblad", xls.sheet_names)
+    sheet = st.selectbox("📘 Kies een tabblad", xls.sheet_names)
     df = pd.read_excel(xls, sheet_name=sheet, header=None)
     st.dataframe(df.head(20))
 
@@ -167,24 +158,33 @@ if uploaded_file:
                         "kinderen": kind_pony_combinaties
                     })
 
-                # splitsen als meer dan 3 kolommen
                 for i in range(0, len(blok_kolommen), 3):
                     slides_data.append({
                         "title": f"Planning {datum_vandaag}",
-                        "columns": blok_kolommen[i:i+3],
+                        "columns": blok_kolommen[i:i + 3],
                         "ondertekst": st.session_state.ondertekst.strip(),
                         "vet": st.session_state.vet,
                         "geel": st.session_state.geel
                     })
 
-            cleaned_slides_data = [b for b in slides_data if "columns" in b and b["columns"]]
-            st.session_state["slides_data"] = cleaned_slides_data
-
-            if len(cleaned_slides_data) < len(slides_data):
-                st.warning(f"{len(slides_data) - len(cleaned_slides_data)} lege sectie(s) overgeslagen tijdens het opslaan.")
-
+            st.session_state["slides_data"] = slides_data
             st.success("Planning is verwerkt. Je kunt nu uploaden.")
 
+            st.markdown("### 📋 Voorbeeld weergave van slides")
+            for idx, blok in enumerate(slides_data):
+                st.markdown(f"**Slide {idx + 1}: {blok['title']}**")
+                cols = st.columns(3)
+                for i, coldata in enumerate(blok["columns"]):
+                    with cols[i]:
+                        st.markdown(f"**{coldata['tijd']}**")
+                        st.markdown(f"Juf: {coldata['juf']}")
+                        for kind, pony in coldata["kinderen"]:
+                            st.markdown(f"{kind} – {pony}")
+                if blok.get("ondertekst"):
+                    stijl = "**" if blok.get("vet") else ""
+                    kleur = '<span style="color:gold">' if blok.get("geel") else ""
+                    einde = "</span>" if kleur else ""
+                    st.markdown(f"{kleur}{stijl}{blok['ondertekst']}{stijl}{einde}", unsafe_allow_html=True)
         else:
             st.warning("Kon geen rij met lestijden vinden.")
     else:
