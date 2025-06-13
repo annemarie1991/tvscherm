@@ -43,7 +43,7 @@ def pony_opmerking(pony_naam: str) -> str:
         with pad.open("r", encoding="utf-8") as f:
             opmerkingen = json.load(f)
         for sleutel, tekst in opmerkingen.items():
-            if sleutel.lower() in pony_naam.lower():
+            if sleutel.lower() in pony_naam.lower() and tekst.lower() not in pony_naam.lower():
                 return f" ({tekst})"
     except Exception:
         pass
@@ -61,6 +61,7 @@ def upload_to_slides():
         service = build('slides', 'v1', credentials=credentials)
 
         presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
+        base_slide_id = presentation.get('slides', [])[0].get('objectId')  # ← eerste slide als sjabloon
         slide_ids = [slide['objectId'] for slide in presentation.get('slides', [])[1:]]
         delete_requests = [{"deleteObject": {"objectId": slide_id}} for slide_id in slide_ids]
 
@@ -75,44 +76,11 @@ def upload_to_slides():
         for index, blok in enumerate(st.session_state["slides_data"]):
             slide_id = f"slide_{uuid.uuid4().hex[:8]}"
             requests.append({
-                "createSlide": {
-                    "objectId": slide_id,
-                    "insertionIndex": str(index + 1),
-                    "slideLayoutReference": {"predefinedLayout": "BLANK"}
-                }
-            })
-
-            # Titel bovenaan
-            title_id = f"title_{uuid.uuid4().hex[:8]}"
-            requests.append({
-                "createShape": {
-                    "objectId": title_id,
-                    "shapeType": "TEXT_BOX",
-                    "elementProperties": {
-                        "pageObjectId": slide_id,
-                        "size": {"height": {"magnitude": 40, "unit": "PT"},
-                                 "width": {"magnitude": 400, "unit": "PT"}},
-                        "transform": {
-                            "scaleX": 1, "scaleY": 1,
-                            "translateX": 150, "translateY": 10,
-                            "unit": "PT"
-                        }
+                "duplicateObject": {
+                    "objectId": base_slide_id,
+                    "objectIds": {
+                        base_slide_id: slide_id
                     }
-                }
-            })
-            requests.append({
-                "insertText": {
-                    "objectId": title_id,
-                    "insertionIndex": 0,
-                    "text": blok["title"]
-                }
-            })
-            requests.append({
-                "updateTextStyle": {
-                    "objectId": title_id,
-                    "textRange": {"type": "ALL"},
-                    "style": {"fontSize": {"magnitude": 18, "unit": "PT"}, "bold": True},
-                    "fields": "fontSize,bold"
                 }
             })
 
@@ -180,11 +148,11 @@ def upload_to_slides():
                         "shapeType": "TEXT_BOX",
                         "elementProperties": {
                             "pageObjectId": slide_id,
-                            "size": {"height": {"magnitude": 60, "unit": "PT"},
+                            "size": {"height": {"magnitude": 80, "unit": "PT"},
                                      "width": {"magnitude": 600, "unit": "PT"}},
                             "transform": {
                                 "scaleX": 1, "scaleY": 1,
-                                "translateX": 50, "translateY": 350,
+                                "translateX": 50, "translateY": 330,
                                 "unit": "PT"
                             }
                         }
