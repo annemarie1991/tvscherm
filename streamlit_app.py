@@ -105,9 +105,63 @@ if uploaded_file:
                     except ValueError:
                         continue
 
-                columns = st.columns(len(gekoppelde_kolommen))
-                for (tijd, kolset), col_container in zip(gekoppelde_kolommen, columns):
-                    for col in kolset:
+columns = st.columns(len(gekoppelde_kolommen))
+for idx, (tijd, kolset) in enumerate(gekoppelde_kolommen):
+    col_container = columns[idx]
+    kind_pony_combinaties = []
+    juf = "onbekend"
+    max_rij = len(df)
+    eigen_pony_rij = None
+
+    for i in range(ponynamen_start_index, len(df)):
+        waarde = str(df.iloc[i, ponynamen_kolom]).strip().lower()
+        if "eigen pony" in waarde:
+            eigen_pony_rij = i
+            max_rij = i
+            break
+
+    if eigen_pony_rij is not None and eigen_pony_rij + 2 < len(df):
+        for col in kolset:
+            mogelijke_juf = str(df.iloc[eigen_pony_rij + 2, col]).strip()
+            if mogelijke_juf and mogelijke_juf.lower() != "nan":
+                juf = mogelijke_juf.title()
+                break
+
+    namen_counter = {}
+
+    for col in kolset:
+        for i in range(ponynamen_start_index, max_rij):
+            ponycel = str(df.iloc[i, ponynamen_kolom]) if i < len(df) else ""
+            naam = str(df.iloc[i, col]) if col in df.columns and i < len(df) else ""
+
+            if not naam or naam.strip().lower() in ["", "nan", "x"]:
+                continue
+
+            pony = ponycel.strip().title()
+            delen = naam.strip().split()
+            voornaam = delen[0].capitalize() if delen else ""
+            achternaam = ""
+            tussenvoegsels = {"van", "de", "der", "den", "ter", "ten", "het", "te"}
+            for deel in delen[1:]:
+                if deel.lower() not in tussenvoegsels:
+                    achternaam = deel.capitalize()
+                    break
+            code = voornaam
+            key = voornaam.lower()
+            if key in namen_counter:
+                code += achternaam[:1].upper()
+            namen_counter[key] = namen_counter.get(key, 0) + 1
+            kind_pony_combinaties.append((code, pony))
+
+    kind_pony_combinaties.sort(key=lambda x: x[0].lower())
+
+    if kind_pony_combinaties:
+        with col_container:
+            st.markdown(f"<strong>Groep {tijd}</strong>", unsafe_allow_html=True)
+            st.markdown(f"<strong>Juf:</strong> {juf}", unsafe_allow_html=True)
+            for naam, pony in kind_pony_combinaties:
+                st.markdown(f"- {naam} – {pony}")
+
                         kind_pony_combinaties = []
                         juf = "onbekend"
                         max_rij = len(df)
