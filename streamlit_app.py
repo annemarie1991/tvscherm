@@ -77,15 +77,20 @@ if uploaded_file:
                         max_rij = i
                         break
 
+                namen_counter = {}
+
                 for i in range(ponynamen_start_index, max_rij):
+                    ponycel = str(df.iloc[i, ponynamen_kolom]) if i < len(df) else ""
                     naam = str(df.iloc[i, col]) if col in df.columns and i < len(df) else ""
-                    if isinstance(naam, str) and re.match(r"(?i)^juf ?", str(df.iloc[i, ponynamen_kolom])):
-                        juf = naam
-                    if not naam or naam.strip() == "" or naam.strip().lower() == "nan" or naam.strip().lower() == "x":
+
+                    if re.match(r"(?i)^juf", ponycel.strip()):
+                        juf = naam.strip()
                         continue
-                    if re.match(r"(?i)^juf ?", str(df.iloc[i, ponynamen_kolom])):
+
+                    if not naam or naam.strip().lower() in ["", "nan", "x"]:
                         continue
-                    pony = str(df.iloc[i, ponynamen_kolom]) if ponynamen_kolom in df.columns and i < len(df) else ""
+
+                    pony = ponycel
                     delen = naam.strip().split()
                     voornaam = delen[0] if delen else ""
                     achternaam = ""
@@ -95,9 +100,14 @@ if uploaded_file:
                             achternaam = deel
                             break
                     code = voornaam
-                    if sum(n.startswith(voornaam) for n, _ in kind_pony_combinaties) > 0:
+                    key = voornaam.lower()
+                    if key in namen_counter:
                         code += achternaam[:1].upper()
+                    namen_counter[key] = namen_counter.get(key, 0) + 1
                     kind_pony_combinaties.append((code, pony))
+
+                # Sorteer op voornaam (code)
+                kind_pony_combinaties.sort(key=lambda x: x[0].lower())
 
                 if kind_pony_combinaties:
                     with st.container():
