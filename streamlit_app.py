@@ -177,7 +177,12 @@ if uploaded_file:
                         "geel": st.session_state.geel
                     })
 
-            st.session_state["slides_data"] = slides_data
+            cleaned_slides_data = [b for b in slides_data if "columns" in b and b["columns"]]
+            st.session_state["slides_data"] = cleaned_slides_data
+
+            if len(cleaned_slides_data) < len(slides_data):
+                st.warning(f"{len(slides_data) - len(cleaned_slides_data)} lege sectie(s) overgeslagen tijdens het opslaan.")
+
             st.success("Planning is verwerkt. Je kunt nu uploaden.")
 
         else:
