@@ -9,6 +9,21 @@ from pathlib import Path
 SCOPES = ['https://www.googleapis.com/auth/presentations']
 PRESENTATION_ID = '1vuVUa8oVsXYNoESTGdZH0NYqJJnNF_HgguSsdAGOkk4'
 
+# ✅ CONTROLEER OF pony_opmerkingen.json GELDIG IS
+try:
+    path = Path("pony_opmerkingen.json")
+    if not path.exists():
+        path.write_text("{}", encoding="utf-8")
+        st.warning("pony_opmerkingen.json is aangemaakt omdat hij ontbrak.")
+    else:
+        with path.open("r", encoding="utf-8") as f:
+            json.load(f)  # Probeer te laden
+except Exception as e:
+    path.write_text("{}", encoding="utf-8")  # Corrupte inhoud overschrijven
+    st.warning(f"pony_opmerkingen.json is hersteld. Oorzaak: {e}")
+
+# Rest van je functies en code blijft ongewijzigd
+
 def parse_markdown_to_text_elements(text):
     elements = []
     bold = False
