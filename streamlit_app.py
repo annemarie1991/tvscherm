@@ -47,9 +47,10 @@ with st.form("notitie_form"):
 
 if opgeslagen:
     opgeslagen_notitie = {"text": tekst, "bold": bold, "highlight": highlight}
+    os.makedirs(os.path.dirname(notes_path), exist_ok=True)
     with open(notes_path, "w") as f:
         json.dump(opgeslagen_notitie, f)
-    st.success("Opgeslagen! Herlaad de pagina om te testen.")
+    st.success("Opgeslagen! Herlaad de pagina om verder te gaan.")
 
 st.markdown("---")
 
@@ -128,7 +129,6 @@ if uploaded_file:
 
             st.markdown("### 🗓️ Planning per groep")
 
-            # Alleen datum (geen weekdag)
             datum_vandaag = datetime.datetime.today().strftime("%d-%m-%Y")
 
             eigen_pony_rij = None
