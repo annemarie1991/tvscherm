@@ -7,9 +7,12 @@ st.set_page_config(page_title="Pony-opmerkingen", layout="wide")
 OPMERKINGEN_PATH = Path("pony_opmerkingen.json")
 
 def load_opmerkingen():
-    if OPMERKINGEN_PATH.exists():
-        with open(OPMERKINGEN_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+    try:
+        if OPMERKINGEN_PATH.exists():
+            with open(OPMERKINGEN_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        return {}
     return {}
 
 def save_opmerkingen(data):
