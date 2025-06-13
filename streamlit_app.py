@@ -64,10 +64,12 @@ if uploaded_file:
                 if tijd_pattern.match(cel):
                     tijd_dict[col] = cel.strip()
 
-            # groepeer kolommen per tijdsblok (30 min)
+            # ⬇️ Fix toegepast voor tijdsortering
             tijd_items = sorted(
                 tijd_dict.items(),
-                key=lambda x: datetime.datetime.strptime(re.split(r"[-\s]", x[1])[0], "%H:%M")
+                key=lambda x: datetime.datetime.strptime(
+                    re.search(r"\d{1,2}:\d{2}", x[1]).group(), "%H:%M"
+                )
             )
 
             groepen_per_blok = []
@@ -75,7 +77,10 @@ if uploaded_file:
             laatst_verwerkte_tijd = None
 
             for col, tijd in tijd_items:
-                tijd_clean = re.split(r"[-\s]", tijd)[0].strip()
+                tijd_clean_match = re.search(r"\d{1,2}:\d{2}", tijd)
+                if not tijd_clean_match:
+                    continue
+                tijd_clean = tijd_clean_match.group()
                 try:
                     tijd_dt = datetime.datetime.strptime(tijd_clean, "%H:%M")
                 except ValueError:
