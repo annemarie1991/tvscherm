@@ -83,10 +83,8 @@ def upload_to_slides():
         all_requests = delete_requests.copy()
 
         blokken = st.session_state.get("slides_data", [])
-        slide_index = 1
 
-        for blok_index in range(0, len(blokken), 4):
-            blokgroep = blokken[blok_index:blok_index + 4]
+        for slide_index, blok in enumerate(blokken, start=1):
             slide_id = f"slide_{slide_index}"
 
             all_requests.append({
@@ -97,14 +95,14 @@ def upload_to_slides():
                 }
             })
 
-            # Datum bovenaan
+            # Titel/datum bovenaan
             datum_id = f"datum_{slide_index}"
             all_requests.append(create_textbox(datum_id, slide_id, 50, 20, 600, 50))
             all_requests.append({
                 "insertText": {
                     "objectId": datum_id,
                     "insertionIndex": 0,
-                    "text": blokgroep[0]["title"]
+                    "text": blok["title"]
                 }
             })
             all_requests.append({
@@ -116,15 +114,15 @@ def upload_to_slides():
                 }
             })
 
-            for j, blok in enumerate(blokgroep):
+            groepen = blok["content"].split("----") if isinstance(blok["content"], str) else [blok["content"]]
+            font_size = 16 if len(groepen) <= 2 else 14 if len(groepen) == 3 else 12
+
+            for j, groep in enumerate(groepen):
                 content_id = f"groep_{slide_index}_{j}"
                 x_offset = 50 + j * 160
-                line_count = blok["content"].count("\n") + 1
-                font_size = 16 if line_count <= 10 else 14 if line_count <= 15 else 12
+                text_elements = parse_text_with_style(groep.strip(), font_size)
 
                 all_requests.append(create_textbox(content_id, slide_id, x_offset, 80, 150, 400))
-                text_elements = parse_text_with_style(blok["content"] + "\n", font_size)
-
                 all_requests.append({
                     "insertText": {
                         "objectId": content_id,
@@ -132,6 +130,7 @@ def upload_to_slides():
                         "text": "".join([e["textRun"]["content"] for e in text_elements])
                     }
                 })
+
                 index = 0
                 for e in text_elements:
                     length = len(e["textRun"]["content"])
@@ -162,6 +161,7 @@ def upload_to_slides():
                         "text": "".join([e["textRun"]["content"] for e in styled_elements])
                     }
                 })
+
                 index = 0
                 for e in styled_elements:
                     length = len(e["textRun"]["content"])
@@ -174,8 +174,6 @@ def upload_to_slides():
                         }
                     })
                     index += length
-
-            slide_index += 1
 
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
