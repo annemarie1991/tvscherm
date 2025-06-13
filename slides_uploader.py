@@ -6,11 +6,7 @@ from googleapiclient.errors import HttpError
 # ID van je bestaande presentatie
 PRESENTATION_ID = "1vuVUa8oVsXYNoESTGdZH0NYqJJnNF_HgguSsdAGOkk4"
 
-
-def parse_text_with_style(text):
-    """
-    Converteer eenvoudige markdownstijl (**vet** en [GEEL]) naar text elements voor Google Slides.
-    """
+def parse_text_with_style(text, font_size=16):
     elements = []
     bold = False
     yellow = False
@@ -19,7 +15,7 @@ def parse_text_with_style(text):
     def flush():
         nonlocal buffer, bold, yellow
         if buffer:
-            style = {"fontSize": {"magnitude": 16, "unit": "PT"}}
+            style = {"fontSize": {"magnitude": font_size, "unit": "PT"}}
             if bold:
                 style["bold"] = True
             if yellow:
@@ -51,6 +47,22 @@ def parse_text_with_style(text):
     flush()
     return elements
 
+def create_textbox(object_id, slide_id, x, y, width, height):
+    return {
+        "createShape": {
+            "objectId": object_id,
+            "shapeType": "TEXT_BOX",
+            "elementProperties": {
+                "pageObjectId": slide_id,
+                "size": {"height": {"magnitude": height, "unit": "PT"}, "width": {"magnitude": width, "unit": "PT"}},
+                "transform": {
+                    "scaleX": 1, "scaleY": 1,
+                    "translateX": x, "translateY": y,
+                    "unit": "PT"
+                }
+            }
+        }
+    }
 
 def upload_to_slides():
     try:
@@ -64,115 +76,115 @@ def upload_to_slides():
 
         service = build("slides", "v1", credentials=creds)
 
-        # Verwijder alle bestaande slides behalve de eerste
         presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
         slide_ids = [slide["objectId"] for slide in presentation.get("slides", [])[1:]]
         delete_requests = [{"deleteObject": {"objectId": sid}} for sid in slide_ids]
-        if delete_requests:
-            service.presentations().batchUpdate(
-                presentationId=PRESENTATION_ID,
-                body={"requests": delete_requests}
-            ).execute()
 
-        # Hernoem eerste slide als titel slide
-        slide_index = 0
+        all_requests = delete_requests.copy()
+
         blokken = st.session_state.get("slides_data", [])
+        slide_index = 1
 
-        # Verdeel blokken in sets van 4 groepen per slide
         for blok_index in range(0, len(blokken), 4):
             blokgroep = blokken[blok_index:blok_index + 4]
             slide_id = f"slide_{slide_index}"
-            requests = []
 
-            if slide_index > 0:
-                requests.append({
-                    "createSlide": {
-                        "objectId": slide_id,
-                        "insertionIndex": slide_index,
-                        "slideLayoutReference": {"predefinedLayout": "BLANK"}
-                    }
-                })
-
-            # Voeg datum toe
-            requests.append({
-                "createShape": {
-                    "objectId": f"datum_{slide_index}",
-                    "shapeType": "TEXT_BOX",
-                    "elementProperties": {
-                        "pageObjectId": slide_id,
-                        "size": {"height": {"magnitude": 50, "unit": "PT"}, "width": {"magnitude": 600, "unit": "PT"}},
-                        "transform": {
-                            "scaleX": 1, "scaleY": 1,
-                            "translateX": 50, "translateY": 20,
-                            "unit": "PT"
-                        }
-                    }
+            all_requests.append({
+                "createSlide": {
+                    "objectId": slide_id,
+                    "insertionIndex": slide_index,
+                    "slideLayoutReference": {"predefinedLayout": "BLANK"}
                 }
             })
-            requests.append({
+
+            # Datum bovenaan
+            datum_id = f"datum_{slide_index}"
+            all_requests.append(create_textbox(datum_id, slide_id, 50, 20, 600, 50))
+            all_requests.append({
                 "insertText": {
-                    "objectId": f"datum_{slide_index}",
+                    "objectId": datum_id,
                     "insertionIndex": 0,
                     "text": blokgroep[0]["title"]
                 }
             })
+            all_requests.append({
+                "updateTextStyle": {
+                    "objectId": datum_id,
+                    "textRange": {"type": "ALL"},
+                    "style": {"fontSize": {"magnitude": 20, "unit": "PT"}, "bold": True},
+                    "fields": "fontSize,bold"
+                }
+            })
 
-            # Bereken fontgrootte afhankelijk van aantal groepen
-            font_size = 16 if len(blokgroep) <= 2 else 14 if len(blokgroep) == 3 else 12
-
-            # Voeg elke groep toe als kolom
             for j, blok in enumerate(blokgroep):
                 content_id = f"groep_{slide_index}_{j}"
                 x_offset = 50 + j * 160
+                line_count = blok["content"].count("\n") + 1
+                font_size = 16 if line_count <= 10 else 14 if line_count <= 15 else 12
 
-                requests.append({
-                    "createShape": {
+                all_requests.append(create_textbox(content_id, slide_id, x_offset, 80, 150, 400))
+                text_elements = parse_text_with_style(blok["content"] + "\n", font_size)
+
+                all_requests.append({
+                    "insertText": {
                         "objectId": content_id,
-                        "shapeType": "TEXT_BOX",
-                        "elementProperties": {
-                            "pageObjectId": slide_id,
-                            "size": {"height": {"magnitude": 400, "unit": "PT"}, "width": {"magnitude": 150, "unit": "PT"}},
-                            "transform": {
-                                "scaleX": 1, "scaleY": 1,
-                                "translateX": x_offset, "translateY": 80,
-                                "unit": "PT"
-                            }
-                        }
+                        "insertionIndex": 0,
+                        "text": "".join([e["textRun"]["content"] for e in text_elements])
                     }
                 })
-                text_elements = parse_text_with_style(blok["content"] + "\n")
-                if text_elements:
-                    requests.append({
-                        "insertText": {
+                index = 0
+                for e in text_elements:
+                    length = len(e["textRun"]["content"])
+                    all_requests.append({
+                        "updateTextStyle": {
                             "objectId": content_id,
-                            "insertionIndex": 0,
-                            "text": "".join([e["textRun"]["content"] for e in text_elements])
+                            "textRange": {"type": "FIXED_RANGE", "startIndex": index, "endIndex": index + length},
+                            "style": e["textRun"]["style"],
+                            "fields": ",".join(e["textRun"]["style"].keys())
                         }
                     })
-                    for k, e in enumerate(text_elements):
-                        requests.append({
-                            "updateTextStyle": {
-                                "objectId": content_id,
-                                "textRange": {
-                                    "type": "FIXED_RANGE",
-                                    "startIndex": sum(len(te["textRun"]["content"]) for te in text_elements[:k]),
-                                    "endIndex": sum(len(te["textRun"]["content"]) for te in text_elements[:k + 1])
-                                },
-                                "style": e["textRun"]["style"],
-                                "fields": ",".join(e["textRun"]["style"].keys())
-                            }
-                        })
+                    index += length
+
+            ondertekst = st.session_state.get("ondertekst", "").strip()
+            if ondertekst:
+                onder_id = f"onder_{slide_index}"
+                geel = st.session_state.get("geel")
+                vet = st.session_state.get("vet")
+                styled_text = f"{'[GEEL]' if geel else ''}{'**' if vet else ''}{ondertekst}{'**' if vet else ''}{'[/GEEL]' if geel else ''}"
+
+                all_requests.append(create_textbox(onder_id, slide_id, 50, 500, 600, 50))
+                styled_elements = parse_text_with_style(styled_text, 14)
+
+                all_requests.append({
+                    "insertText": {
+                        "objectId": onder_id,
+                        "insertionIndex": 0,
+                        "text": "".join([e["textRun"]["content"] for e in styled_elements])
+                    }
+                })
+                index = 0
+                for e in styled_elements:
+                    length = len(e["textRun"]["content"])
+                    all_requests.append({
+                        "updateTextStyle": {
+                            "objectId": onder_id,
+                            "textRange": {"type": "FIXED_RANGE", "startIndex": index, "endIndex": index + length},
+                            "style": e["textRun"]["style"],
+                            "fields": ",".join(e["textRun"]["style"].keys())
+                        }
+                    })
+                    index += length
 
             slide_index += 1
 
-            service.presentations().batchUpdate(
-                presentationId=PRESENTATION_ID,
-                body={"requests": requests}
-            ).execute()
+        service.presentations().batchUpdate(
+            presentationId=PRESENTATION_ID,
+            body={"requests": all_requests}
+        ).execute()
 
         st.success("✅ Succesvol geüpload naar Google Slides!")
 
     except HttpError as error:
         st.error(f"Fout bij Google Slides API: {error}")
     except Exception as e:
-        st.error(f"Fout tijdens up
+        st.error(f"Fout tijdens uploaden naar Slides: {e}")
