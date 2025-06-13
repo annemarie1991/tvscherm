@@ -6,7 +6,50 @@ from googleapiclient.errors import HttpError
 # ID van je bestaande presentatie
 PRESENTATION_ID = "1vuVUa8oVsXYNoESTGdZH0NYqJJnNF_HgguSsdAGOkk4"
 
-MAX_KOLOMMEN_PER_SLIDE = 4
+
+def parse_text_with_style(text):
+    """
+    Converteer eenvoudige markdownstijl (**vet** en [GEEL]) naar text elements voor Google Slides.
+    """
+    elements = []
+    bold = False
+    yellow = False
+    buffer = ""
+
+    def flush():
+        nonlocal buffer, bold, yellow
+        if buffer:
+            style = {"fontSize": {"magnitude": 16, "unit": "PT"}}
+            if bold:
+                style["bold"] = True
+            if yellow:
+                style["foregroundColor"] = {
+                    "opaqueColor": {
+                        "rgbColor": {"red": 1, "green": 0.8, "blue": 0}
+                    }
+                }
+            elements.append({"textRun": {"content": buffer, "style": style}})
+            buffer = ""
+
+    i = 0
+    while i < len(text):
+        if text[i:i + 2] == "**":
+            flush()
+            bold = not bold
+            i += 2
+        elif text[i:i + 6] == "[GEEL]":
+            flush()
+            yellow = True
+            i += 6
+        elif text[i:i + 7] == "[/GEEL]":
+            flush()
+            yellow = False
+            i += 7
+        else:
+            buffer += text[i]
+            i += 1
+    flush()
+    return elements
 
 
 def upload_to_slides():
@@ -21,6 +64,7 @@ def upload_to_slides():
 
         service = build("slides", "v1", credentials=creds)
 
+        # Verwijder alle bestaande slides behalve de eerste
         presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
         slide_ids = [slide["objectId"] for slide in presentation.get("slides", [])[1:]]
         delete_requests = [{"deleteObject": {"objectId": sid}} for sid in slide_ids]
@@ -30,33 +74,36 @@ def upload_to_slides():
                 body={"requests": delete_requests}
             ).execute()
 
-        # Genereer slides op basis van blokken, maximaal 4 per slide
-        slides_data = st.session_state.get("slides_data", [])
-        for page_index in range(0, len(slides_data), MAX_KOLOMMEN_PER_SLIDE):
-            subset = slides_data[page_index:page_index + MAX_KOLOMMEN_PER_SLIDE]
-            slide_id = f"slide_{page_index}"
-            requests = [
-                {
+        # Hernoem eerste slide als titel slide
+        slide_index = 0
+        blokken = st.session_state.get("slides_data", [])
+
+        # Verdeel blokken in sets van 4 groepen per slide
+        for blok_index in range(0, len(blokken), 4):
+            blokgroep = blokken[blok_index:blok_index + 4]
+            slide_id = f"slide_{slide_index}"
+            requests = []
+
+            if slide_index > 0:
+                requests.append({
                     "createSlide": {
                         "objectId": slide_id,
-                        "insertionIndex": page_index,
+                        "insertionIndex": slide_index,
                         "slideLayoutReference": {"predefinedLayout": "BLANK"}
                     }
-                }
-            ]
+                })
 
-            # Titel (datum) gecentreerd bovenaan
-            title_id = f"title_{page_index}"
+            # Voeg datum toe
             requests.append({
                 "createShape": {
-                    "objectId": title_id,
+                    "objectId": f"datum_{slide_index}",
                     "shapeType": "TEXT_BOX",
                     "elementProperties": {
                         "pageObjectId": slide_id,
-                        "size": {"height": {"magnitude": 50, "unit": "PT"}, "width": {"magnitude": 500, "unit": "PT"}},
+                        "size": {"height": {"magnitude": 50, "unit": "PT"}, "width": {"magnitude": 600, "unit": "PT"}},
                         "transform": {
                             "scaleX": 1, "scaleY": 1,
-                            "translateX": 100, "translateY": 20,
+                            "translateX": 50, "translateY": 20,
                             "unit": "PT"
                         }
                     }
@@ -64,94 +111,59 @@ def upload_to_slides():
             })
             requests.append({
                 "insertText": {
-                    "objectId": title_id,
+                    "objectId": f"datum_{slide_index}",
                     "insertionIndex": 0,
-                    "text": subset[0]["title"]
-                }
-            })
-            requests.append({
-                "updateTextStyle": {
-                    "objectId": title_id,
-                    "textRange": {"type": "ALL"},
-                    "style": {"bold": True, "fontSize": {"magnitude": 24, "unit": "PT"}},
-                    "fields": "bold,fontSize"
+                    "text": blokgroep[0]["title"]
                 }
             })
 
-            # Kolommen
-            kolombreedte = 150
-            spacing = 20
-            start_x = 50
-            for i, blok in enumerate(subset):
-                content_id = f"content_{page_index}_{i}"
-                x = start_x + i * (kolombreedte + spacing)
+            # Bereken fontgrootte afhankelijk van aantal groepen
+            font_size = 16 if len(blokgroep) <= 2 else 14 if len(blokgroep) == 3 else 12
+
+            # Voeg elke groep toe als kolom
+            for j, blok in enumerate(blokgroep):
+                content_id = f"groep_{slide_index}_{j}"
+                x_offset = 50 + j * 160
+
                 requests.append({
                     "createShape": {
                         "objectId": content_id,
                         "shapeType": "TEXT_BOX",
                         "elementProperties": {
                             "pageObjectId": slide_id,
-                            "size": {"height": {"magnitude": 400, "unit": "PT"}, "width": {"magnitude": kolombreedte, "unit": "PT"}},
+                            "size": {"height": {"magnitude": 400, "unit": "PT"}, "width": {"magnitude": 150, "unit": "PT"}},
                             "transform": {
                                 "scaleX": 1, "scaleY": 1,
-                                "translateX": x, "translateY": 100,
+                                "translateX": x_offset, "translateY": 80,
                                 "unit": "PT"
                             }
                         }
                     }
                 })
-                requests.append({
-                    "insertText": {
-                        "objectId": content_id,
-                        "insertionIndex": 0,
-                        "text": blok["content"]
-                    }
-                })
-
-            # Ondertekst
-            onder = st.session_state.get("ondertekst", "")
-            if onder:
-                ondertekst_id = f"onder_{page_index}"
-                requests.append({
-                    "createShape": {
-                        "objectId": ondertekst_id,
-                        "shapeType": "TEXT_BOX",
-                        "elementProperties": {
-                            "pageObjectId": slide_id,
-                            "size": {"height": {"magnitude": 50, "unit": "PT"}, "width": {"magnitude": 600, "unit": "PT"}},
-                            "transform": {
-                                "scaleX": 1, "scaleY": 1,
-                                "translateX": 50, "translateY": 520,
-                                "unit": "PT"
-                            }
-                        }
-                    }
-                })
-                requests.append({
-                    "insertText": {
-                        "objectId": ondertekst_id,
-                        "insertionIndex": 0,
-                        "text": onder
-                    }
-                })
-                stijl = {}
-                if st.session_state.get("vet"):
-                    stijl["bold"] = True
-                if st.session_state.get("geel"):
-                    stijl["foregroundColor"] = {
-                        "opaqueColor": {
-                            "rgbColor": {"red": 1, "green": 0.8, "blue": 0}
-                        }
-                    }
-                if stijl:
+                text_elements = parse_text_with_style(blok["content"] + "\n")
+                if text_elements:
                     requests.append({
-                        "updateTextStyle": {
-                            "objectId": ondertekst_id,
-                            "textRange": {"type": "ALL"},
-                            "style": stijl,
-                            "fields": ",".join(stijl.keys())
+                        "insertText": {
+                            "objectId": content_id,
+                            "insertionIndex": 0,
+                            "text": "".join([e["textRun"]["content"] for e in text_elements])
                         }
                     })
+                    for k, e in enumerate(text_elements):
+                        requests.append({
+                            "updateTextStyle": {
+                                "objectId": content_id,
+                                "textRange": {
+                                    "type": "FIXED_RANGE",
+                                    "startIndex": sum(len(te["textRun"]["content"]) for te in text_elements[:k]),
+                                    "endIndex": sum(len(te["textRun"]["content"]) for te in text_elements[:k + 1])
+                                },
+                                "style": e["textRun"]["style"],
+                                "fields": ",".join(e["textRun"]["style"].keys())
+                            }
+                        })
+
+            slide_index += 1
 
             service.presentations().batchUpdate(
                 presentationId=PRESENTATION_ID,
@@ -163,4 +175,4 @@ def upload_to_slides():
     except HttpError as error:
         st.error(f"Fout bij Google Slides API: {error}")
     except Exception as e:
-        st.error(f"Fout tijdens uploaden naar Slides: {e}")
+        st.error(f"Fout tijdens up
