@@ -66,31 +66,36 @@ if uploaded_file:
                 kind_pony_combinaties = []
                 juf = None
                 for i, pony in enumerate(ponynamen):
-                    naam = str(df.iloc[i, col]) if i < len(df) else ""
-                    if isinstance(naam, str) and naam.strip():
-                        delen = naam.strip().split()
-                        voornaam = delen[0] if delen else ""
-                        achternaam = ""
-                        tussenvoegsels = {"van", "de", "der", "den", "ter", "ten", "het", "te"}
-                        for deel in delen[1:]:
-                            if deel.lower() not in tussenvoegsels:
-                                achternaam = deel
-                                break
-                        code = voornaam
-                        if sum(n.startswith(voornaam) for n, _ in kind_pony_combinaties) > 0:
-                            code += achternaam[:1].upper()
-                        kind_pony_combinaties.append((code, pony))
-                    elif isinstance(naam, str) and "juf" in naam.lower():
+                    if i >= len(df):
+                        continue
+                    naam = str(df.iloc[i, col])
+                    if not naam or naam.strip() == "" or naam.strip().lower() == "nan" or naam.strip().lower() == "x":
+                        continue
+                    if "juf" in naam.lower():
                         juf = naam
+                        continue
+                    delen = naam.strip().split()
+                    voornaam = delen[0] if delen else ""
+                    achternaam = ""
+                    tussenvoegsels = {"van", "de", "der", "den", "ter", "ten", "het", "te"}
+                    for deel in delen[1:]:
+                        if deel.lower() not in tussenvoegsels:
+                            achternaam = deel
+                            break
+                    code = voornaam
+                    if sum(n.startswith(voornaam) for n, _ in kind_pony_combinaties) > 0:
+                        code += achternaam[:1].upper()
+                    kind_pony_combinaties.append((code, pony))
 
-                with st.container():
-                    st.markdown(f"**Groep {tijd}**")
-                    if juf:
-                        st.markdown(f"Juf: **{juf}**")
-                    else:
-                        st.markdown("Juf: _onbekend_")
-                    for naam, pony in kind_pony_combinaties:
-                        st.markdown(f"- {naam} – {pony}")
+                if kind_pony_combinaties:
+                    with st.container():
+                        st.markdown(f"**Groep {tijd}**")
+                        if juf:
+                            st.markdown(f"Juf: **{juf}**")
+                        else:
+                            st.markdown("Juf: _onbekend_")
+                        for naam, pony in kind_pony_combinaties:
+                            st.markdown(f"- {naam} – {pony}")
         else:
             st.warning("Kon geen rij met lestijden vinden.")
     else:
