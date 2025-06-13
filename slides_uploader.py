@@ -4,7 +4,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 # ID van je bestaande presentatie
-PRESENTATION_ID = "1uhfZtV-ota0vNrmQyLi6hmxRMvkuo1qM"
+PRESENTATION_ID = "1vuVUa8oVsXYNoESTGdZH0NYqJJnNF_HgguSsdAGOkk4"
 
 def upload_to_slides():
     try:
