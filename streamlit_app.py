@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 import re
 import locale
+from pathlib import Path
 
 # Nederlandse datuminstelling
 try:
@@ -21,13 +22,20 @@ Upload hieronder het Excel-bestand met de planning. Kies daarna het juiste tabbl
 De app herkent automatisch de ponynamen, lestijden, kindernamen (geanonimiseerd) en juffen.
 """)
 
-# 📝 Laad opgeslagen tekst uit session_state
+# 📁 Pad naar lokaal bestand
+tekstpad = Path("ondertekst.txt")
+
+# 📌 Ondertekst: laden uit bestand of session_state
 if "ondertekst" not in st.session_state:
-    st.session_state.ondertekst = ""
-if "vet" not in st.session_state:
-    st.session_state.vet = False
-if "geel" not in st.session_state:
-    st.session_state.geel = False
+    if tekstpad.exists():
+        regels = tekstpad.read_text(encoding="utf-8").split("\n")
+        st.session_state.ondertekst = regels[0] if regels else ""
+        st.session_state.vet = regels[1] == "True" if len(regels) > 1 else False
+        st.session_state.geel = regels[2] == "True" if len(regels) > 2 else False
+    else:
+        st.session_state.ondertekst = ""
+        st.session_state.vet = False
+        st.session_state.geel = False
 
 # 📌 Ondertekst instellingen
 st.sidebar.header("📝 Ondertekst instellen")
@@ -38,6 +46,7 @@ if st.sidebar.button("💾 Opslaan"):
     st.session_state.ondertekst = nieuwe_tekst
     st.session_state.vet = vet
     st.session_state.geel = geel
+    tekstpad.write_text(f"{nieuwe_tekst}\n{vet}\n{geel}", encoding="utf-8")
     st.sidebar.success("Tekst opgeslagen!")
 
 uploaded_file = st.file_uploader("📄 Upload je Excel-bestand", type=["xlsx"])
@@ -114,7 +123,6 @@ if uploaded_file:
                 groepen_per_blok.append(huidige_blok)
 
             st.markdown("### 📅 Planning per groep")
-
             datum_vandaag = datetime.datetime.today().strftime("%d-%m-%Y")
 
             eigen_pony_rij = None
@@ -171,10 +179,10 @@ if uploaded_file:
                         st.markdown(f"<strong>Juf:</strong> {juf}</strong>", unsafe_allow_html=True)
                         for naam, pony in kind_pony_combinaties:
                             st.markdown(f"- {naam} – {pony}")
-                        # 👇 Toon de datum in het midden
+
                         if i == midden_index:
                             st.markdown(f"<div style='text-align:center; margin-top:1em; font-weight:bold;'>{datum_vandaag}</div>", unsafe_allow_html=True)
-                        # 👇 Toon ondertekst onderaan
+
                         if st.session_state.ondertekst:
                             stijl = ""
                             if st.session_state.geel:
@@ -185,7 +193,6 @@ if uploaded_file:
                                 f"<div style='text-align:center; margin-top:1.5em; {stijl}'>{st.session_state.ondertekst}</div>",
                                 unsafe_allow_html=True
                             )
-
         else:
             st.warning("Kon geen rij met lestijden vinden.")
     else:
