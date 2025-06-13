@@ -7,11 +7,9 @@ import json
 from pathlib import Path
 
 SCOPES = ['https://www.googleapis.com/auth/presentations']
-SERVICE_ACCOUNT_FILE = 'service_account.json'
 PRESENTATION_ID = '1vuVUa8oVsXYNoESTGdZH0NYqJJnNF_HgguSsdAGOkk4'
 
 def parse_markdown_to_text_elements(text):
-    """Verandert **vetgedrukte** stukken naar Google Slides style-structuur"""
     elements = []
     bold = False
     buffer = ""
@@ -57,12 +55,9 @@ def upload_to_slides():
         return
 
     try:
-        import google.auth
-
-credentials = service_account.Credentials.from_service_account_info(
-    st.secrets["gcp_service_account"], scopes=SCOPES
-)
-
+        credentials = service_account.Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"], scopes=SCOPES
+        )
         service = build('slides', 'v1', credentials=credentials)
 
         presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
@@ -131,7 +126,8 @@ credentials = service_account.Credentials.from_service_account_info(
 
                 content = f"**{col['tijd']}**\n**Juf: {col['juf']}**\n\n"
                 for kind, pony in col["kinderen"]:
-                    content += f"{kind} – {pony}\n"
+                    opm = pony_opmerking(pony)
+                    content += f"{kind} – {pony}{opm}\n"
 
                 textbox_id = f"textbox_{uuid.uuid4().hex[:8]}"
                 requests.append({
@@ -175,7 +171,7 @@ credentials = service_account.Credentials.from_service_account_info(
                         })
                     index_start += length
 
-            # Ondertekst (iets hoger)
+            # Ondertekst
             if blok.get("ondertekst"):
                 onder_id = f"onder_{uuid.uuid4().hex[:8]}"
                 requests.append({
@@ -188,7 +184,7 @@ credentials = service_account.Credentials.from_service_account_info(
                                      "width": {"magnitude": 600, "unit": "PT"}},
                             "transform": {
                                 "scaleX": 1, "scaleY": 1,
-                                "translateX": 50, "translateY": 350,
+                                "translateX": 50, "translateY": 370,
                                 "unit": "PT"
                             }
                         }
