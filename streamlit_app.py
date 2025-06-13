@@ -15,7 +15,7 @@ except:
 
 st.set_page_config(page_title="Het Zesspan Ponyplanner", layout="wide")
 
-st.title("🐴 Het Zesspan Ponyplanner")
+st.title("🌾 Het Zesspan Ponyplanner")
 
 st.markdown("""
 Upload hieronder het Excel-bestand met de planning. Kies daarna het juiste tabblad.
@@ -26,7 +26,7 @@ uploaded_file = st.file_uploader("📄 Upload je Excel-bestand", type=["xlsx"])
 
 if uploaded_file:
     xls = pd.ExcelFile(uploaded_file)
-    sheet = st.selectbox("📃 Kies een tabblad", xls.sheet_names)
+    sheet = st.selectbox("📜 Kies een tabblad", xls.sheet_names)
     df = pd.read_excel(xls, sheet_name=sheet, header=None)
 
     st.markdown("### 📊 Voorbeeld van de data")
@@ -56,7 +56,7 @@ if uploaded_file:
     if ponynamen_kolom is not None:
         # Zoek de rij met tijden
         tijdrij = None
-        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-–−]\s*\d{1,2}:\d{2})?\b")
+        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-\u2013\u2212]\s*\d{1,2}:\d{2})?\b")
         for i in range(0, 5):
             if any(tijd_pattern.search(str(cell)) for cell in df.iloc[i]):
                 tijdrij = i
@@ -72,7 +72,7 @@ if uploaded_file:
             tijd_lijst = list(tijd_dict.items())
             tijd_lijst.sort(key=lambda x: x[0])
 
-            st.markdown("### 📅 Planning per groep")
+            st.markdown("### 🗓 Planning per groep")
             datum_vandaag = datetime.datetime.today().strftime("%A %d-%m-%Y")
             st.markdown(f"**Datum:** {datum_vandaag}")
 
@@ -84,7 +84,7 @@ if uploaded_file:
                     i += 1
                     continue
 
-                basis_tijd_clean = re.sub(r"[–−]", "-", hoofd_tijd)
+                basis_tijd_clean = re.sub(r"[\u2013\u2212]", "-", hoofd_tijd)
                 basis_tijd_clean = re.split(r"[-\s]", basis_tijd_clean)[0].strip()
                 try:
                     basis_tijd = datetime.datetime.strptime(basis_tijd_clean, "%H:%M")
@@ -96,7 +96,7 @@ if uploaded_file:
                 j = i
                 while j < len(tijd_lijst):
                     tijd, kolset = tijd_lijst[j]
-                    tijd_clean = re.sub(r"[–−]", "-", tijd)
+                    tijd_clean = re.sub(r"[\u2013\u2212]", "-", tijd)
                     tijd_clean = re.split(r"[-\s]", tijd_clean)[0].strip()
                     try:
                         test_tijd = datetime.datetime.strptime(tijd_clean, "%H:%M")
@@ -110,7 +110,6 @@ if uploaded_file:
                     except ValueError:
                         break
 
-                # Nu renderen we deze set van groepen naast elkaar
                 columns = st.columns(len(gekoppelde_kolommen))
                 for (tijd, kolset), col_container in zip(gekoppelde_kolommen, columns):
                     kind_pony_combinaties = []
@@ -125,15 +124,15 @@ if uploaded_file:
                             max_rij = r
                             break
 
-                    if eigen_pony_rij is not None and eigen_pony_rij + 2 < len(df):
-                        for col in kolset:
-                            mogelijke_juf = str(df.iloc[eigen_pony_rij + 2, col]).strip()
-                            if mogelijke_juf and mogelijke_juf.lower() != "nan":
-                                juf = mogelijke_juf.title()
-                                break
+                    if eigen_pony_rij is not None:
+                        for r in range(eigen_pony_rij, eigen_pony_rij + 5):
+                            for col in kolset:
+                                cel = str(df.iloc[r, col]).strip()
+                                if re.match(r"juf ?", cel.lower()):
+                                    juf = cel.split(" ")[-1].capitalize()
+                                    break
 
                     namen_counter = {}
-
                     for col in kolset:
                         for r in range(ponynamen_start_index, max_rij):
                             ponycel = str(df.iloc[r, ponynamen_kolom]) if r < len(df) else ""
@@ -166,6 +165,7 @@ if uploaded_file:
                         for naam, pony in kind_pony_combinaties:
                             st.markdown(f"- {naam} – {pony}")
 
+                st.markdown("---")  # Scheiding tussen 30-minutenblokken
                 i = j
         else:
             st.warning("Kon geen rij met lestijden vinden.")
