@@ -16,8 +16,8 @@ except:
     except:
         pass
 
-st.set_page_config(page_title="Het Zesspan Ponyplanner", layout="wide")
-st.title("🐴 Het Zesspan Ponyplanner")
+st.set_page_config(page_title="Het Zesspan TV Scherm", layout="wide")
+st.title("🐴 Het Zesspan TV Scherm")
 
 # 📁 Pad naar lokaal bestand
 tekstpad = Path("ondertekst.txt")
@@ -139,13 +139,14 @@ if uploaded_file:
                     break
 
             reeds_in_bak = set()
+            slides_data = []
 
             for blok in groepen_per_blok:
                 st.markdown("---")
-
                 midden_index = len(blok) // 2
                 st.markdown(f"<div style='text-align:center; margin-top:1em; font-weight:bold;'>{datum_vandaag}</div>", unsafe_allow_html=True)
 
+                groep_tekst = ""
                 cols = st.columns(len(blok))
                 for i, ((col, tijd), container) in enumerate(zip(blok, cols)):
                     max_rij = eigen_pony_rij if eigen_pony_rij else len(df)
@@ -186,19 +187,31 @@ if uploaded_file:
                     with container:
                         st.markdown(f"<strong>Groep {tijd}</strong>", unsafe_allow_html=True)
                         st.markdown(f"<strong>Juf:</strong> {juf}</strong>", unsafe_allow_html=True)
+                        groep_tekst += f"Groep {tijd} – Juf: {juf}\n"
                         for naam, pony in kind_pony_combinaties:
-                            st.markdown(f"- {naam} – {pony}")
+                            lijn = f"- {naam} – {pony}"
+                            groep_tekst += lijn + "\n"
+                            st.markdown(lijn)
 
-                if st.session_state.ondertekst:
+                onder = st.session_state.ondertekst.strip()
+                if onder:
                     stijl = ""
                     if st.session_state.geel:
                         stijl += "background-color:yellow; padding:4px; border-radius:4px;"
                     if st.session_state.vet:
                         stijl += "font-weight:bold;"
                     st.markdown(
-                        f"<div style='text-align:center; margin-top:1.5em; {stijl}'>{st.session_state.ondertekst}</div>",
+                        f"<div style='text-align:center; margin-top:1.5em; {stijl}'>{onder}</div>",
                         unsafe_allow_html=True
                     )
+                    groep_tekst += f"\n\n{onder}"
+
+                slides_data.append({
+                    "title": f"Planning {datum_vandaag}",
+                    "content": groep_tekst.strip()
+                })
+
+            st.session_state["slides_data"] = slides_data
 
         else:
             st.warning("Kon geen rij met lestijden vinden.")
