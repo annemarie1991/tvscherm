@@ -68,7 +68,16 @@ if uploaded_file:
             for tijd, col in zip(tijden, kolommen):
                 kind_pony_combinaties = []
                 juf = None
+                max_rij = len(df)
+
+                # Zoek de rij waar "eigen pony" staat in de ponynamen-kolom, om af te kappen
                 for i in range(ponynamen_start_index, len(df)):
+                    waarde = str(df.iloc[i, ponynamen_kolom]).strip().lower()
+                    if "eigen pony" in waarde:
+                        max_rij = i
+                        break
+
+                for i in range(ponynamen_start_index, max_rij):
                     naam = str(df.iloc[i, col]) if col in df.columns and i < len(df) else ""
                     if isinstance(naam, str) and re.match(r"(?i)^juf ?", str(df.iloc[i, ponynamen_kolom])):
                         juf = naam
@@ -92,11 +101,11 @@ if uploaded_file:
 
                 if kind_pony_combinaties:
                     with st.container():
-                        st.markdown(f"**Groep {tijd}**")
+                        st.markdown(f"<strong>Groep {tijd}</strong>", unsafe_allow_html=True)
                         if juf:
-                            st.markdown(f"Juf: **{juf}**")
+                            st.markdown(f"<strong>Juf:</strong> {juf}", unsafe_allow_html=True)
                         else:
-                            st.markdown("Juf: _onbekend_")
+                            st.markdown("<em>Juf: onbekend</em>", unsafe_allow_html=True)
                         for naam, pony in kind_pony_combinaties:
                             st.markdown(f"- {naam} – {pony}")
         else:
