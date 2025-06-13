@@ -24,14 +24,19 @@ if uploaded_file:
 
     # Zoek de kolom met >60 aaneengeschakelde pony-namen (niet leeg, niet numeriek)
     ponynamen_kolom = None
+    ponynamen_start_index = 0
     for col in df.columns:
         tekst_rijen = df[col].dropna().astype(str)
         telling = 0
-        for value in tekst_rijen:
+        start_index = None
+        for idx, value in tekst_rijen.items():
             if re.match(r"^[A-Za-z\- ]+$", value):
+                if telling == 0:
+                    start_index = idx
                 telling += 1
                 if telling >= 60:
                     ponynamen_kolom = col
+                    ponynamen_start_index = start_index
                     break
             else:
                 telling = 0
@@ -63,12 +68,13 @@ if uploaded_file:
             for tijd, col in zip(tijden, kolommen):
                 kind_pony_combinaties = []
                 juf = None
-                for i in range(len(df)):
+                for i in range(ponynamen_start_index, len(df)):
                     naam = str(df.iloc[i, col]) if col in df.columns and i < len(df) else ""
+                    if isinstance(naam, str) and re.match(r"(?i)^juf ?", str(df.iloc[i, ponynamen_kolom])):
+                        juf = naam
                     if not naam or naam.strip() == "" or naam.strip().lower() == "nan" or naam.strip().lower() == "x":
                         continue
-                    if "juf" in naam.lower():
-                        juf = naam
+                    if re.match(r"(?i)^juf ?", str(df.iloc[i, ponynamen_kolom])):
                         continue
                     pony = str(df.iloc[i, ponynamen_kolom]) if ponynamen_kolom in df.columns and i < len(df) else ""
                     delen = naam.strip().split()
