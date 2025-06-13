@@ -204,6 +204,10 @@ if uploaded_file:
                         f"<div style='text-align:center; margin-top:1.5em; {stijl}'>{onder}</div>",
                         unsafe_allow_html=True
                     )
+                    if st.session_state.geel:
+                        onder = f"[GEEL]{onder}[/GEEL]"
+                    if st.session_state.vet:
+                        onder = f"**{onder}**"
                     groep_tekst += f"\n\n{onder}"
 
                 slides_data.append({
@@ -212,6 +216,12 @@ if uploaded_file:
                 })
 
             st.session_state["slides_data"] = slides_data
+
+            # Voor controle/debug
+            st.subheader("✅ Controle: slides_data inhoud")
+            for i, blok in enumerate(slides_data, start=1):
+                st.markdown(f"**Slide {i}**")
+                st.text(f"Titel: {blok['title']}\nInhoud:\n{blok['content']}")
 
         else:
             st.warning("Kon geen rij met lestijden vinden.")
