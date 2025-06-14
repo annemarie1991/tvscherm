@@ -9,6 +9,13 @@ import json
 
 st.set_page_config(page_title="Het Zesspan TV Scherm", layout="wide")
 
+# 👉 Bovenste knoppen
+col_a, col_b = st.columns(2)
+with col_a:
+    st.link_button("📄 Bewerk presentatie", "https://docs.google.com/presentation/d/1vuVUa8oVsXYNoESTGdZH0NYqJJnNF_HgguSsdAGOkk4/edit?slide=id.slide_27146aef")
+with col_b:
+    st.link_button("🌐 Bekijk online", "https://www.hetzesspan.nl/tv")
+
 # 👉 Pony-opmerkingen initialiseren
 pony_opmerkingen_pad = Path("pony_opmerkingen.json")
 if "pony_opmerkingen" not in st.session_state:
@@ -35,8 +42,17 @@ if st.sidebar.checkbox("✏️ Pony-opmerkingen beheren"):
 
     if st.session_state.pony_opmerkingen:
         st.sidebar.markdown("### 📋 Huidige opmerkingen")
+        verwijder_sleutel = None
         for naam, opm in st.session_state.pony_opmerkingen.items():
-            st.sidebar.markdown(f"- **{naam}**: {opm}")
+            col1, col2 = st.sidebar.columns([5, 1])
+            col1.markdown(f"**{naam}**: {opm}")
+            if col2.button("🗑️", key=f"verwijder_{naam}"):
+                verwijder_sleutel = naam
+        if verwijder_sleutel:
+            st.session_state.pony_opmerkingen.pop(verwijder_sleutel, None)
+            with pony_opmerkingen_pad.open("w", encoding="utf-8") as f:
+                json.dump(st.session_state.pony_opmerkingen, f, ensure_ascii=False, indent=2)
+            st.experimental_rerun()
 
 # 👉 Basisinstellingen
 try:
@@ -140,14 +156,12 @@ if uploaded_file:
                 groepen_per_blok.append(huidige_blok)
 
             datum_vandaag = datetime.datetime.today().strftime("%d-%m-%Y")
-
-            # ✅ Zoek eerste regel met 'eigen pony' in alle kolommen
             eigen_pony_rijen = [
                 r for r in range(ponynamen_start_index, len(df))
                 if any("eigen pony" in str(df.iloc[r, c]).strip().lower() for c in df.columns)
             ]
             eigen_pony_rij = min(eigen_pony_rijen) if eigen_pony_rijen else None
-            max_rij = eigen_pony_rij if eigen_pony_rij is not None else len(df)
+            max_rij = eigen_pony_rij if eigen_pony_rij else len(df)
 
             reeds_in_bak = set()
             slides_data = []
