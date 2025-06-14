@@ -81,7 +81,7 @@ def upload_to_slides():
         requests = []
 
         # Slides in juiste volgorde (eerste slide eerst)
-        for blok in st.session_state["slides_data"]:
+        for blok in reversed(st.session_state["slides_data"]):
             slide_id = f"slide_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "duplicateObject": {
