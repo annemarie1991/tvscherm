@@ -140,8 +140,12 @@ if uploaded_file:
                 groepen_per_blok.append(huidige_blok)
 
             datum_vandaag = datetime.datetime.today().strftime("%d-%m-%Y")
-            eigen_pony_rij = next((r for r in range(ponynamen_start_index, len(df))
-                                   if "eigen pony" in str(df.iloc[r, ponynamen_kolom]).strip().lower()), None)
+            eigen_pony_rijen = [
+    r for r in range(ponynamen_start_index, len(df))
+    if any("eigen pony" in str(df.iloc[r, c]).strip().lower() for c in df.columns)
+]
+eigen_pony_rij = min(eigen_pony_rijen) if eigen_pony_rijen else None
+
             max_rij = eigen_pony_rij if eigen_pony_rij else len(df)
 
             reeds_in_bak = set()
