@@ -140,13 +140,14 @@ if uploaded_file:
                 groepen_per_blok.append(huidige_blok)
 
             datum_vandaag = datetime.datetime.today().strftime("%d-%m-%Y")
-            eigen_pony_rijen = [
-    r for r in range(ponynamen_start_index, len(df))
-    if any("eigen pony" in str(df.iloc[r, c]).strip().lower() for c in df.columns)
-]
-eigen_pony_rij = min(eigen_pony_rijen) if eigen_pony_rijen else None
 
-            max_rij = eigen_pony_rij if eigen_pony_rij else len(df)
+            # ✅ Zoek eerste regel met 'eigen pony' in alle kolommen
+            eigen_pony_rijen = [
+                r for r in range(ponynamen_start_index, len(df))
+                if any("eigen pony" in str(df.iloc[r, c]).strip().lower() for c in df.columns)
+            ]
+            eigen_pony_rij = min(eigen_pony_rijen) if eigen_pony_rijen else None
+            max_rij = eigen_pony_rij if eigen_pony_rij is not None else len(df)
 
             reeds_in_bak = set()
             slides_data = []
