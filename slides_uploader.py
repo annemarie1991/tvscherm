@@ -66,7 +66,6 @@ def upload_to_slides():
         base_slide_id = slides[-1]['objectId']  # De laatste slide is het sjabloon
         slides_to_delete = [s['objectId'] for s in slides[:-1]]  # Verwijder alle behalve de laatste
 
-        # Oude slides verwijderen behalve de laatste (sjabloon)
         if slides_to_delete:
             delete_requests = [{"deleteObject": {"objectId": sid}} for sid in slides_to_delete]
             service.presentations().batchUpdate(
@@ -74,9 +73,10 @@ def upload_to_slides():
                 body={"requests": delete_requests}
             ).execute()
 
-        # Nieuwe slides bouwen
         requests = []
-        for index, blok in enumerate(st.session_state["slides_data"]):
+
+        # ✅ Upload slides in juiste volgorde (eerste blok eerst)
+        for index, blok in enumerate(st.session_state["slides_data"][::-1]):
             slide_id = f"slide_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "duplicateObject": {
@@ -85,7 +85,6 @@ def upload_to_slides():
                 }
             })
 
-            # ✅ Datum bovenaan gecentreerd en vet
             datum_id = f"datum_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "createShape": {
@@ -236,7 +235,6 @@ def upload_to_slides():
                     }
                 })
 
-        # Upload in juiste volgorde (eerste slide eerst)
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
             body={"requests": requests}
