@@ -68,14 +68,14 @@ def upload_to_slides():
 
         base_slide_id = slides[-1]['objectId']  # Laatste slide = sjabloon
 
-        # 👉 Alle tekstvakken van alle slides verwijderen
+        # 👉 Alle tekstvakken (TEXT_BOX) van alle slides verwijderen
         cleanup_requests = []
         for slide in slides:
+            slide_id = slide['objectId']
             for element in slide.get('pageElements', []):
                 if element.get('shape', {}).get('shapeType') == 'TEXT_BOX':
-                    cleanup_requests.append({
-                        "deleteObject": {"objectId": element['objectId']}
-                    })
+                    element_id = element['objectId']
+                    cleanup_requests.append({"deleteObject": {"objectId": element_id}})
         if cleanup_requests:
             service.presentations().batchUpdate(
                 presentationId=PRESENTATION_ID,
@@ -246,22 +246,6 @@ def upload_to_slides():
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
             body={"requests": requests}
-        ).execute()
-
-        # 👉 Zet sjabloon-slide als allerlaatste slide
-        new_total = len(slides) - 1 + len(st.session_state["slides_data"])
-        service.presentations().batchUpdate(
-            presentationId=PRESENTATION_ID,
-            body={
-                "requests": [
-                    {
-                        "updateSlidesPosition": {
-                            "slideObjectIds": [base_slide_id],
-                            "insertionIndex": new_total
-                        }
-                    }
-                ]
-            }
         ).execute()
 
         st.success("Slides zijn opgeschoond en opnieuw gevuld!")
