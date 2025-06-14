@@ -44,7 +44,6 @@ if st.sidebar.checkbox("✏️ Pony-opmerkingen beheren"):
             if cols[1].button("🗑️", key=f"verwijder_{naam}"):
                 st.session_state.verwijder_sleutel = naam
 
-# Verwijder indien nodig
 if st.session_state.verwijder_sleutel:
     st.session_state.pony_opmerkingen.pop(st.session_state.verwijder_sleutel, None)
     with pony_opmerkingen_pad.open("w", encoding="utf-8") as f:
@@ -174,7 +173,15 @@ if uploaded_file:
             for blok in groepen_per_blok:
                 blok_kolommen = []
                 for col, tijd in blok:
-                    juf = str(df.iloc[eigen_pony_rij + 2, col]).strip().title() if eigen_pony_rij and pd.notna(df.iloc[eigen_pony_rij + 2, col]) else "Onbekend"
+                    if eigen_pony_rij is not None and eigen_pony_rij + 2 < len(df):
+                        cel = df.iloc[eigen_pony_rij + 2, col]
+                        if pd.notna(cel) and str(cel).strip():
+                            juf = str(cel).strip().title()
+                        else:
+                            juf = "Onbekend"
+                    else:
+                        juf = "Onbekend"
+
                     kind_pony_combinaties = []
                     namen_counter = {}
 
