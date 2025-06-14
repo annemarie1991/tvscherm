@@ -85,7 +85,7 @@ def upload_to_slides():
             requests.append({
                 "updateSlidesPosition": {
                     "slideObjectIds": [slide_id],
-                    "insertionIndex": index + 1
+                    "insertionIndex": index
                 }
             })
 
