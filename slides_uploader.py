@@ -246,7 +246,7 @@ def upload_to_slides():
         ).execute()
 
         # Zet sjabloonslide weer als laatste
-        final_slide_count = len(st.session_state["slides_data"]) + 1
+        final_slide_count = len(st.session_state["slides_data"])
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
             body={
@@ -254,7 +254,7 @@ def upload_to_slides():
                     {
                         "updateSlidesPosition": {
                             "slideObjectIds": [base_slide_id],
-                            "insertionIndex": final_slide_count - 1
+                            "insertionIndex": new_slide_count
                         }
                     }
                 ]
