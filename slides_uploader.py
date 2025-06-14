@@ -60,10 +60,15 @@ def upload_to_slides():
         )
         service = build('slides', 'v1', credentials=credentials)
 
+        # Ophalen van bestaande slides
         presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
-        base_slide_id = presentation.get('slides', [])[0].get('objectId')
-        slide_ids = [slide['objectId'] for slide in presentation.get('slides', [])[1:]]
-        delete_requests = [{"deleteObject": {"objectId": slide_id}} for slide_id in slide_ids]
+        slides = presentation.get('slides', [])
+        if len(slides) < 1:
+            st.error("Geen slides aanwezig in de presentatie.")
+            return
+
+        base_slide_id = slides[-1].get('objectId')  # ← Laatste slide = sjabloon
+        delete_requests = [{"deleteObject": {"objectId": slide['objectId']}} for slide in slides[:-1]]  # Verwijder alle behalve laatste
 
         if delete_requests:
             service.presentations().batchUpdate(
@@ -79,13 +84,6 @@ def upload_to_slides():
                 "duplicateObject": {
                     "objectId": base_slide_id,
                     "objectIds": {base_slide_id: slide_id}
-                }
-            })
-            # Zet slide in juiste volgorde
-            requests.append({
-                "updateSlidesPosition": {
-                    "slideObjectIds": [slide_id],
-                    "insertionIndex": index
                 }
             })
 
