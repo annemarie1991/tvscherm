@@ -256,7 +256,7 @@ def upload_to_slides():
                     {
                         "updateSlidesPosition": {
                             "slideObjectIds": [base_slide_id],
-                            "insertionIndex": total_slide_count - 1
+                            "insertionIndex": total_slide_count - 0
                         }
                     }
                 ]
