@@ -67,13 +67,10 @@ def upload_to_slides():
             st.error("Geen slides gevonden in de presentatie.")
             return
 
-        base_slide_id = slides[-1]['objectId']  # Ga ervan uit dat de sjabloon laatst toegevoegd is
-        slides_to_delete = [
-            s['objectId'] for s in slides
-            if s['objectId'] != base_slide_id
-        ]
+        base_slide_id = slides[-1]['objectId']  # Laatste slide = sjabloon
+        slides_to_delete = [s['objectId'] for s in slides if s['objectId'] != base_slide_id]
 
-        # Oude slides verwijderen behalve de sjabloon
+        # Oude slides verwijderen behalve sjabloon
         if slides_to_delete:
             delete_requests = [{"deleteObject": {"objectId": sid}} for sid in slides_to_delete]
             service.presentations().batchUpdate(
@@ -81,9 +78,9 @@ def upload_to_slides():
                 body={"requests": delete_requests}
             ).execute()
 
-        # Nieuwe slides bouwen
+        # Nieuwe slides bouwen in OMGEKEERDE volgorde
         requests = []
-        for blok in st.session_state["slides_data"]:
+        for blok in reversed(st.session_state["slides_data"]):  # reverse = juiste volgorde in Slides
             slide_id = f"slide_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "duplicateObject": {
@@ -92,7 +89,7 @@ def upload_to_slides():
                 }
             })
 
-            # ✅ Datum bovenaan gecentreerd en vet
+            # ✅ Datum bovenaan
             datum_id = f"datum_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "createShape": {
@@ -189,7 +186,7 @@ def upload_to_slides():
                         })
                     index_start += length
 
-            # ✅ Ondertekst onderaan gecentreerd
+            # ✅ Ondertekst
             if blok.get("ondertekst"):
                 onder_id = f"onder_{uuid.uuid4().hex[:8]}"
                 requests.append({
@@ -243,7 +240,7 @@ def upload_to_slides():
                     }
                 })
 
-        # Upload alles in juiste volgorde
+        # Slides uploaden
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
             body={"requests": requests}
