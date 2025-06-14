@@ -13,7 +13,7 @@ def parse_markdown_to_text_elements(text):
     elements = []
     bold = False
     buffer = ""
-
+    
     def flush():
         nonlocal buffer, bold
         if buffer:
@@ -22,7 +22,7 @@ def parse_markdown_to_text_elements(text):
                 style["bold"] = True
             elements.append({"textRun": {"content": buffer, "style": style}})
             buffer = ""
-
+    
     i = 0
     while i < len(text):
         if text[i:i+2] == "**":
@@ -42,9 +42,9 @@ def pony_opmerking(pony_naam: str) -> str:
     try:
         with pad.open("r", encoding="utf-8") as f:
             opmerkingen = json.load(f)
-        for sleutel, tekst in opmerkingen.items():
-            if sleutel.lower() in pony_naam.lower() and tekst.lower() not in pony_naam.lower():
-                return f" ({tekst})"
+            for sleutel, tekst in opmerkingen.items():
+                if sleutel.lower() in pony_naam.lower() and tekst.lower() not in pony_naam.lower():
+                    return f" ({tekst})"
     except Exception:
         pass
     return ""
@@ -62,6 +62,7 @@ def upload_to_slides():
 
         presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
         slides = presentation.get('slides', [])
+
         if not slides:
             st.error("Geen slides gevonden in de presentatie.")
             return
@@ -78,7 +79,8 @@ def upload_to_slides():
 
         requests = []
 
-        for blok in reversed(st.session_state["slides_data"]):
+        # 🔄 Aangepast: Verwijder reversed() voor correcte volgorde
+        for blok in st.session_state["slides_data"]:
             slide_id = f"slide_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "duplicateObject": {
@@ -131,11 +133,11 @@ def upload_to_slides():
             x_offset = 50
             y_offset = 60
             column_width = 200
-
+            
             for i, col in enumerate(blok["columns"]):
                 box_x = x_offset + i * (column_width + 40)
                 box_y = y_offset
-
+                
                 content = f"**{col['tijd']}**\n**Juf: {col['juf']}**\n\n"
                 for kind, pony in col["kinderen"]:
                     opm = pony_opmerking(pony)
@@ -158,7 +160,7 @@ def upload_to_slides():
                         }
                     }
                 })
-
+                
                 parsed = parse_markdown_to_text_elements(content)
                 full_text = "".join([e["textRun"]["content"] for e in parsed])
                 requests.append({
@@ -168,7 +170,7 @@ def upload_to_slides():
                         "text": full_text
                     }
                 })
-
+                
                 index_start = 0
                 for element in parsed:
                     length = len(element["textRun"]["content"])
@@ -208,7 +210,6 @@ def upload_to_slides():
                         "text": blok["ondertekst"]
                     }
                 })
-
                 style = {}
                 if blok.get("vet"):
                     style["bold"] = True
@@ -216,7 +217,6 @@ def upload_to_slides():
                     style["foregroundColor"] = {
                         "opaqueColor": {"rgbColor": {"red": 1, "green": 0.84, "blue": 0}}
                     }
-
                 if style:
                     requests.append({
                         "updateTextStyle": {
@@ -226,7 +226,6 @@ def upload_to_slides():
                             "fields": ",".join(style.keys())
                         }
                     })
-
                 requests.append({
                     "updateParagraphStyle": {
                         "objectId": onder_id,
@@ -242,18 +241,17 @@ def upload_to_slides():
             body={"requests": requests}
         ).execute()
 
-        # Zet sjabloonslide weer als laatste
+        # 🔄 Aangepaste positie-update voor sjabloonslide
+        total_slides = len(service.presentations().get(presentationId=PRESENTATION_ID).execute().get('slides', []))
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
             body={
-                "requests": [
-                    {
-                        "updateSlidesPosition": {
-                            "slideObjectIds": [base_slide_id],
-                            "insertionIndex": len(slides) - 1 + len(st.session_state["slides_data"])
-                        }
+                "requests": [{
+                    "updateSlidesPosition": {
+                        "slideObjectIds": [base_slide_id],
+                        "insertionIndex": total_slides - 1  # Zet sjabloon als laatste
                     }
-                ]
+                }]
             }
         ).execute()
 
