@@ -70,7 +70,6 @@ def upload_to_slides():
         base_slide_id = slides[-1]['objectId']  # Laatste slide = sjabloon
         slides_to_delete = [s['objectId'] for s in slides[:-1]]
 
-        # Oude slides verwijderen behalve sjabloon
         if slides_to_delete:
             delete_requests = [{"deleteObject": {"objectId": sid}} for sid in slides_to_delete]
             service.presentations().batchUpdate(
@@ -245,8 +244,11 @@ def upload_to_slides():
             body={"requests": requests}
         ).execute()
 
-        # Zet sjabloonslide weer als laatste
-        final_slide_count = len(st.session_state["slides_data"])
+        # 🟨 Zet sjabloonslide weer als laatste
+        # Herlaad presentatie zodat we het correcte totaal hebben NA toevoeging van nieuwe slides
+        updated_presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
+        total_slide_count = len(updated_presentation.get("slides", []))
+
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
             body={
@@ -254,7 +256,7 @@ def upload_to_slides():
                     {
                         "updateSlidesPosition": {
                             "slideObjectIds": [base_slide_id],
-                            "insertionIndex": new_slide_count
+                            "insertionIndex": total_slide_count - 1
                         }
                     }
                 ]
