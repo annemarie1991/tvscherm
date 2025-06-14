@@ -60,25 +60,26 @@ def upload_to_slides():
         )
         service = build('slides', 'v1', credentials=credentials)
 
-        # Ophalen van bestaande slides
+        # Haal alle slides op
         presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
         slides = presentation.get('slides', [])
-        if len(slides) < 1:
-            st.error("Geen slides aanwezig in de presentatie.")
+        if not slides:
+            st.error("Er is geen enkele slide in de presentatie.")
             return
 
-        base_slide_id = slides[-1].get('objectId')  # ← Laatste slide = sjabloon
-        delete_requests = [{"deleteObject": {"objectId": slide['objectId']}} for slide in slides[:-1]]  # Verwijder alle behalve laatste
+        base_slide_id = slides[-1]['objectId']  # LAATSTE SLIDE = sjabloon
+        slide_ids_to_delete = [s['objectId'] for s in slides[:-1]]  # Verwijder ALLES behalve laatste
 
-        if delete_requests:
+        if slide_ids_to_delete:
             service.presentations().batchUpdate(
                 presentationId=PRESENTATION_ID,
-                body={"requests": delete_requests}
+                body={"requests": [{"deleteObject": {"objectId": sid}} for sid in slide_ids_to_delete]}
             ).execute()
 
+        # Begin met dupliceren van de sjabloon voor elke slide
         requests = []
 
-        for index, blok in enumerate(st.session_state["slides_data"]):
+        for blok in st.session_state["slides_data"]:
             slide_id = f"slide_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "duplicateObject": {
@@ -87,7 +88,7 @@ def upload_to_slides():
                 }
             })
 
-            # Datum bovenaan gecentreerd en vet
+            # Datum bovenaan
             datum_id = f"datum_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "createShape": {
@@ -129,6 +130,7 @@ def upload_to_slides():
                 }
             })
 
+            # Kolommen
             x_offset = 50
             y_offset = 60
             column_width = 200
@@ -184,7 +186,7 @@ def upload_to_slides():
                         })
                     index_start += length
 
-            # Ondertekst onderaan gecentreerd
+            # Ondertekst
             if blok.get("ondertekst"):
                 onder_id = f"onder_{uuid.uuid4().hex[:8]}"
                 requests.append({
@@ -238,6 +240,7 @@ def upload_to_slides():
                     }
                 })
 
+        # Verstuur alle verzoeken in één keer
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
             body={"requests": requests}
