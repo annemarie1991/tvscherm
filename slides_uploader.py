@@ -60,17 +60,15 @@ def upload_to_slides():
         )
         service = build('slides', 'v1', credentials=credentials)
 
-        # Presentatie ophalen
         presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
         slides = presentation.get('slides', [])
         if not slides:
             st.error("Geen slides gevonden in de presentatie.")
             return
 
-        base_slide_id = slides[-1]['objectId']  # Laatste slide = sjabloon
-        slides_to_delete = [s['objectId'] for s in slides if s['objectId'] != base_slide_id]
+        base_slide_id = slides[-1]['objectId']
+        slides_to_delete = [s['objectId'] for s in slides[:-1]]
 
-        # Oude slides verwijderen behalve sjabloon
         if slides_to_delete:
             delete_requests = [{"deleteObject": {"objectId": sid}} for sid in slides_to_delete]
             service.presentations().batchUpdate(
@@ -78,9 +76,9 @@ def upload_to_slides():
                 body={"requests": delete_requests}
             ).execute()
 
-        # Nieuwe slides bouwen in OMGEKEERDE volgorde
         requests = []
-        for blok in reversed(st.session_state["slides_data"]):  # reverse = juiste volgorde in Slides
+
+        for blok in reversed(st.session_state["slides_data"]):
             slide_id = f"slide_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "duplicateObject": {
@@ -89,7 +87,6 @@ def upload_to_slides():
                 }
             })
 
-            # ✅ Datum bovenaan
             datum_id = f"datum_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "createShape": {
@@ -186,7 +183,6 @@ def upload_to_slides():
                         })
                     index_start += length
 
-            # ✅ Ondertekst
             if blok.get("ondertekst"):
                 onder_id = f"onder_{uuid.uuid4().hex[:8]}"
                 requests.append({
@@ -240,10 +236,25 @@ def upload_to_slides():
                     }
                 })
 
-        # Slides uploaden
+        # Upload alle requests
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
             body={"requests": requests}
+        ).execute()
+
+        # Zet sjabloonslide weer als laatste
+        service.presentations().batchUpdate(
+            presentationId=PRESENTATION_ID,
+            body={
+                "requests": [
+                    {
+                        "updateSlidesPosition": {
+                            "slideObjectIds": [base_slide_id],
+                            "insertionIndex": len(slides) - 1 + len(st.session_state["slides_data"])
+                        }
+                    }
+                ]
+            }
         ).execute()
 
         st.success("Slides succesvol geüpload!")
