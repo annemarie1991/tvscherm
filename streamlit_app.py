@@ -51,7 +51,7 @@ if st.session_state.verwijder_sleutel:
     st.session_state.verwijder_sleutel = None
     st.sidebar.success("Opmerking verwijderd!")
 
-# 👉 Basisinstellingen
+# 👉 Locale instellen
 try:
     locale.setlocale(locale.LC_TIME, 'nl_NL.UTF-8')
 except:
@@ -173,14 +173,15 @@ if uploaded_file:
             for blok in groepen_per_blok:
                 blok_kolommen = []
                 for col, tijd in blok:
-                    if eigen_pony_rij is not None and eigen_pony_rij + 2 < len(df):
-                        cel = df.iloc[eigen_pony_rij + 2, col]
-                        if pd.notna(cel) and str(cel).strip():
-                            juf = str(cel).strip().title()
-                        else:
-                            juf = "Onbekend"
-                    else:
-                        juf = "Onbekend"
+                    # Verbeterde juf-herkenning (zoek in max. 8 rijen onder eigen_pony_rij)
+                    juf = "Onbekend"
+                    if eigen_pony_rij:
+                        for offset in range(2, 10):
+                            if eigen_pony_rij + offset < len(df):
+                                cel = df.iloc[eigen_pony_rij + offset, col]
+                                if pd.notna(cel) and str(cel).strip():
+                                    juf = str(cel).strip().title()
+                                    break
 
                     kind_pony_combinaties = []
                     namen_counter = {}
