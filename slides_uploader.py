@@ -13,7 +13,7 @@ def parse_markdown_to_text_elements(text):
     elements = []
     bold = False
     buffer = ""
-    
+
     def flush():
         nonlocal buffer, bold
         if buffer:
@@ -22,7 +22,7 @@ def parse_markdown_to_text_elements(text):
                 style["bold"] = True
             elements.append({"textRun": {"content": buffer, "style": style}})
             buffer = ""
-    
+
     i = 0
     while i < len(text):
         if text[i:i+2] == "**":
@@ -42,9 +42,9 @@ def pony_opmerking(pony_naam: str) -> str:
     try:
         with pad.open("r", encoding="utf-8") as f:
             opmerkingen = json.load(f)
-            for sleutel, tekst in opmerkingen.items():
-                if sleutel.lower() in pony_naam.lower() and tekst.lower() not in pony_naam.lower():
-                    return f" ({tekst})"
+        for sleutel, tekst in opmerkingen.items():
+            if sleutel.lower() in pony_naam.lower() and tekst.lower() not in pony_naam.lower():
+                return f" ({tekst})"
     except Exception:
         pass
     return ""
@@ -60,16 +60,17 @@ def upload_to_slides():
         )
         service = build('slides', 'v1', credentials=credentials)
 
+        # Presentatie ophalen
         presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
         slides = presentation.get('slides', [])
-
         if not slides:
             st.error("Geen slides gevonden in de presentatie.")
             return
 
-        base_slide_id = slides[-1]['objectId']
+        base_slide_id = slides[-1]['objectId']  # Laatste slide = sjabloon
         slides_to_delete = [s['objectId'] for s in slides[:-1]]
 
+        # Oude slides verwijderen behalve sjabloon
         if slides_to_delete:
             delete_requests = [{"deleteObject": {"objectId": sid}} for sid in slides_to_delete]
             service.presentations().batchUpdate(
@@ -79,8 +80,8 @@ def upload_to_slides():
 
         requests = []
 
-        # 🔄 Aangepaste volgorde: reversed() voor correcte slide-positie
-        for blok in reversed(st.session_state["slides_data"]):  # ← Kernwijziging hier
+        # Slides in juiste volgorde (eerste slide eerst)
+        for blok in st.session_state["slides_data"]:
             slide_id = f"slide_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "duplicateObject": {
@@ -89,27 +90,174 @@ def upload_to_slides():
                 }
             })
 
-            # ... (zelfde datum/textbox-code als eerder) ...
+            datum_id = f"datum_{uuid.uuid4().hex[:8]}"
+            requests.append({
+                "createShape": {
+                    "objectId": datum_id,
+                    "shapeType": "TEXT_BOX",
+                    "elementProperties": {
+                        "pageObjectId": slide_id,
+                        "size": {"height": {"magnitude": 30, "unit": "PT"},
+                                 "width": {"magnitude": 600, "unit": "PT"}},
+                        "transform": {
+                            "scaleX": 1, "scaleY": 1,
+                            "translateX": 50, "translateY": 5,
+                            "unit": "PT"
+                        }
+                    }
+                }
+            })
+            requests.append({
+                "insertText": {
+                    "objectId": datum_id,
+                    "insertionIndex": 0,
+                    "text": blok["title"].replace("Planning ", "")
+                }
+            })
+            requests.append({
+                "updateTextStyle": {
+                    "objectId": datum_id,
+                    "textRange": {"type": "ALL"},
+                    "style": {"fontSize": {"magnitude": 14, "unit": "PT"}, "bold": True},
+                    "fields": "fontSize,bold"
+                }
+            })
+            requests.append({
+                "updateParagraphStyle": {
+                    "objectId": datum_id,
+                    "textRange": {"type": "ALL"},
+                    "style": {"alignment": "CENTER"},
+                    "fields": "alignment"
+                }
+            })
 
-        # ... (zelfde ondertekst-logica) ...
+            x_offset = 50
+            y_offset = 60
+            column_width = 200
 
-        # Uitvoeren van alle requests
+            for i, col in enumerate(blok["columns"]):
+                box_x = x_offset + i * (column_width + 40)
+                box_y = y_offset
+
+                content = f"**{col['tijd']}**\n**Juf: {col['juf']}**\n\n"
+                for kind, pony in col["kinderen"]:
+                    opm = pony_opmerking(pony)
+                    content += f"{kind} – {pony}{opm}\n"
+
+                textbox_id = f"textbox_{uuid.uuid4().hex[:8]}"
+                requests.append({
+                    "createShape": {
+                        "objectId": textbox_id,
+                        "shapeType": "TEXT_BOX",
+                        "elementProperties": {
+                            "pageObjectId": slide_id,
+                            "size": {"height": {"magnitude": 300, "unit": "PT"},
+                                     "width": {"magnitude": column_width, "unit": "PT"}},
+                            "transform": {
+                                "scaleX": 1, "scaleY": 1,
+                                "translateX": box_x, "translateY": box_y,
+                                "unit": "PT"
+                            }
+                        }
+                    }
+                })
+
+                parsed = parse_markdown_to_text_elements(content)
+                full_text = "".join([e["textRun"]["content"] for e in parsed])
+                requests.append({
+                    "insertText": {
+                        "objectId": textbox_id,
+                        "insertionIndex": 0,
+                        "text": full_text
+                    }
+                })
+
+                index_start = 0
+                for element in parsed:
+                    length = len(element["textRun"]["content"])
+                    if element["textRun"].get("style"):
+                        requests.append({
+                            "updateTextStyle": {
+                                "objectId": textbox_id,
+                                "textRange": {"type": "FIXED_RANGE", "startIndex": index_start, "endIndex": index_start + length},
+                                "style": element["textRun"]["style"],
+                                "fields": ",".join(element["textRun"]["style"].keys())
+                            }
+                        })
+                    index_start += length
+
+            if blok.get("ondertekst"):
+                onder_id = f"onder_{uuid.uuid4().hex[:8]}"
+                requests.append({
+                    "createShape": {
+                        "objectId": onder_id,
+                        "shapeType": "TEXT_BOX",
+                        "elementProperties": {
+                            "pageObjectId": slide_id,
+                            "size": {"height": {"magnitude": 80, "unit": "PT"},
+                                     "width": {"magnitude": 600, "unit": "PT"}},
+                            "transform": {
+                                "scaleX": 1, "scaleY": 1,
+                                "translateX": 50, "translateY": 330,
+                                "unit": "PT"
+                            }
+                        }
+                    }
+                })
+                requests.append({
+                    "insertText": {
+                        "objectId": onder_id,
+                        "insertionIndex": 0,
+                        "text": blok["ondertekst"]
+                    }
+                })
+
+                style = {}
+                if blok.get("vet"):
+                    style["bold"] = True
+                if blok.get("geel"):
+                    style["foregroundColor"] = {
+                        "opaqueColor": {"rgbColor": {"red": 1, "green": 0.84, "blue": 0}}
+                    }
+
+                if style:
+                    requests.append({
+                        "updateTextStyle": {
+                            "objectId": onder_id,
+                            "textRange": {"type": "ALL"},
+                            "style": style,
+                            "fields": ",".join(style.keys())
+                        }
+                    })
+
+                requests.append({
+                    "updateParagraphStyle": {
+                        "objectId": onder_id,
+                        "textRange": {"type": "ALL"},
+                        "style": {"alignment": "CENTER"},
+                        "fields": "alignment"
+                    }
+                })
+
+        # Alle slides aanmaken
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
             body={"requests": requests}
         ).execute()
 
-        # 🔄 Definitieve sjabloonpositie
-        total_slides = len(service.presentations().get(presentationId=PRESENTATION_ID).execute().get('slides', []))
+        # Zet sjabloonslide weer als laatste
+        final_slide_count = len(st.session_state["slides_data"]) + 1
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
             body={
-                "requests": [{
-                    "updateSlidesPosition": {
-                        "slideObjectIds": [base_slide_id],
-                        "insertionIndex": total_slides  # Zet sjabloon altijd als laatste
+                "requests": [
+                    {
+                        "updateSlidesPosition": {
+                            "slideObjectIds": [base_slide_id],
+                            "insertionIndex": final_slide_count - 1
+                        }
                     }
-                }]
+                ]
             }
         ).execute()
 
