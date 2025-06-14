@@ -60,15 +60,17 @@ def upload_to_slides():
         )
         service = build('slides', 'v1', credentials=credentials)
 
+        # Presentatie ophalen
         presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
         slides = presentation.get('slides', [])
         if not slides:
             st.error("Geen slides gevonden in de presentatie.")
             return
 
-        base_slide_id = slides[-1]['objectId']
+        base_slide_id = slides[-1]['objectId']  # Laatste slide = sjabloon
         slides_to_delete = [s['objectId'] for s in slides[:-1]]
 
+        # Oude slides verwijderen behalve sjabloon
         if slides_to_delete:
             delete_requests = [{"deleteObject": {"objectId": sid}} for sid in slides_to_delete]
             service.presentations().batchUpdate(
@@ -78,7 +80,8 @@ def upload_to_slides():
 
         requests = []
 
-        for blok in reversed(st.session_state["slides_data"]):
+        # Slides in juiste volgorde (eerste slide eerst)
+        for blok in st.session_state["slides_data"]:
             slide_id = f"slide_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "duplicateObject": {
@@ -236,13 +239,14 @@ def upload_to_slides():
                     }
                 })
 
-        # Upload alle requests
+        # Alle slides aanmaken
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
             body={"requests": requests}
         ).execute()
 
         # Zet sjabloonslide weer als laatste
+        final_slide_count = len(st.session_state["slides_data"]) + 1
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
             body={
@@ -250,7 +254,7 @@ def upload_to_slides():
                     {
                         "updateSlidesPosition": {
                             "slideObjectIds": [base_slide_id],
-                            "insertionIndex": len(slides) - 1 + len(st.session_state["slides_data"])
+                            "insertionIndex": final_slide_count - 1
                         }
                     }
                 ]
