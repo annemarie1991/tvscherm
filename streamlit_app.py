@@ -9,13 +9,6 @@ import json
 
 st.set_page_config(page_title="Het Zesspan TV Scherm", layout="wide")
 
-# 👉 Bovenste knoppen
-col_a, col_b = st.columns(2)
-with col_a:
-    st.link_button("📄 Bewerk presentatie", "https://docs.google.com/presentation/d/1vuVUa8oVsXYNoESTGdZH0NYqJJnNF_HgguSsdAGOkk4/edit?slide=id.slide_27146aef")
-with col_b:
-    st.link_button("🌐 Bekijk online", "https://www.hetzesspan.nl/tv")
-
 # 👉 Pony-opmerkingen initialiseren
 pony_opmerkingen_pad = Path("pony_opmerkingen.json")
 if "pony_opmerkingen" not in st.session_state:
@@ -27,6 +20,9 @@ if "pony_opmerkingen" not in st.session_state:
             st.session_state.pony_opmerkingen = {}
     except Exception:
         st.session_state.pony_opmerkingen = {}
+
+if "verwijder_sleutel" not in st.session_state:
+    st.session_state.verwijder_sleutel = None
 
 # 👉 Pony-opmerkingen beheren in de zijbalk
 if st.sidebar.checkbox("✏️ Pony-opmerkingen beheren"):
@@ -42,17 +38,19 @@ if st.sidebar.checkbox("✏️ Pony-opmerkingen beheren"):
 
     if st.session_state.pony_opmerkingen:
         st.sidebar.markdown("### 📋 Huidige opmerkingen")
-        verwijder_sleutel = None
         for naam, opm in st.session_state.pony_opmerkingen.items():
-            col1, col2 = st.sidebar.columns([5, 1])
-            col1.markdown(f"**{naam}**: {opm}")
-            if col2.button("🗑️", key=f"verwijder_{naam}"):
-                verwijder_sleutel = naam
-        if verwijder_sleutel:
-            st.session_state.pony_opmerkingen.pop(verwijder_sleutel, None)
-            with pony_opmerkingen_pad.open("w", encoding="utf-8") as f:
-                json.dump(st.session_state.pony_opmerkingen, f, ensure_ascii=False, indent=2)
-            st.experimental_rerun()
+            cols = st.sidebar.columns([4, 1])
+            cols[0].markdown(f"- **{naam}**: {opm}")
+            if cols[1].button("🗑️", key=f"verwijder_{naam}"):
+                st.session_state.verwijder_sleutel = naam
+
+# Verwijder indien nodig
+if st.session_state.verwijder_sleutel:
+    st.session_state.pony_opmerkingen.pop(st.session_state.verwijder_sleutel, None)
+    with pony_opmerkingen_pad.open("w", encoding="utf-8") as f:
+        json.dump(st.session_state.pony_opmerkingen, f, ensure_ascii=False, indent=2)
+    st.session_state.verwijder_sleutel = None
+    st.sidebar.success("Opmerking verwijderd!")
 
 # 👉 Basisinstellingen
 try:
@@ -62,6 +60,13 @@ except:
         locale.setlocale(locale.LC_TIME, 'nl_NL')
     except:
         pass
+
+# 👉 Link-knoppen bovenaan
+col1, col2 = st.columns(2)
+with col1:
+    st.link_button("📄 Bewerk presentatie", "https://docs.google.com/presentation/d/1vuVUa8oVsXYNoESTGdZH0NYqJJnNF_HgguSsdAGOkk4/edit?slide=id.slide_27146aef")
+with col2:
+    st.link_button("🌐 Bekijk online", "https://www.hetzesspan.nl/tv")
 
 st.title("🏄 Het Zesspan TV Scherm")
 
@@ -117,7 +122,7 @@ if uploaded_file:
             break
 
     if ponynamen_kolom is not None:
-        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-\u2013−]\s*\d{1,2}:\d{2})?\b")
+        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-–−]\s*\d{1,2}:\d{2})?\b")
         tijdrij = next((i for i in range(0, 5) if any(tijd_pattern.search(str(cell)) for cell in df.iloc[i])), None)
 
         if tijdrij is not None:
@@ -205,7 +210,6 @@ if uploaded_file:
                         reeds_in_bak.add(pony)
 
                     kind_pony_combinaties.sort(key=lambda x: x[0].lower())
-
                     blok_kolommen.append({
                         "tijd": tijd,
                         "juf": juf,
