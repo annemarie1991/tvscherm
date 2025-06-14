@@ -1,3 +1,54 @@
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+import uuid
+import streamlit as st
+import re
+import json
+from pathlib import Path
+
+SCOPES = ['https://www.googleapis.com/auth/presentations']
+PRESENTATION_ID = '1vuVUa8oVsXYNoESTGdZH0NYqJJnNF_HgguSsdAGOkk4'
+
+def parse_markdown_to_text_elements(text):
+    elements = []
+    bold = False
+    buffer = ""
+
+    def flush():
+        nonlocal buffer, bold
+        if buffer:
+            style = {}
+            if bold:
+                style["bold"] = True
+            elements.append({"textRun": {"content": buffer, "style": style}})
+            buffer = ""
+
+    i = 0
+    while i < len(text):
+        if text[i:i+2] == "**":
+            flush()
+            bold = not bold
+            i += 2
+        else:
+            buffer += text[i]
+            i += 1
+    flush()
+    return elements
+
+def pony_opmerking(pony_naam: str) -> str:
+    pad = Path("pony_opmerkingen.json")
+    if not pad.exists():
+        return ""
+    try:
+        with pad.open("r", encoding="utf-8") as f:
+            opmerkingen = json.load(f)
+        for sleutel, tekst in opmerkingen.items():
+            if sleutel.lower() in pony_naam.lower() and tekst.lower() not in pony_naam.lower():
+                return f" ({tekst})"
+    except Exception:
+        pass
+    return ""
+
 def upload_to_slides():
     if "slides_data" not in st.session_state or not st.session_state["slides_data"]:
         st.error("Geen slides om te uploaden.")
@@ -9,27 +60,23 @@ def upload_to_slides():
         )
         service = build('slides', 'v1', credentials=credentials)
 
+        # Presentatie ophalen
         presentation = service.presentations().get(presentationId=PRESENTATION_ID).execute()
         slides = presentation.get('slides', [])
-        if len(slides) < 1:
-            st.error("Geen slides gevonden in de presentatie.")
-            return
+        base_slide_id = slides[-1]['objectId']  # De laatste slide is het sjabloon
+        slides_to_delete = [s['objectId'] for s in slides[:-1]]  # Verwijder alle behalve de laatste
 
-        base_slide_id = slides[-1].get('objectId')  # laatste slide is sjabloon
-        slide_ids = [slide['objectId'] for slide in slides[:-1]]  # alles behalve laatste
-
-        delete_requests = [{"deleteObject": {"objectId": slide_id}} for slide_id in slide_ids]
-        if delete_requests:
+        # Oude slides verwijderen behalve de laatste (sjabloon)
+        if slides_to_delete:
+            delete_requests = [{"deleteObject": {"objectId": sid}} for sid in slides_to_delete]
             service.presentations().batchUpdate(
                 presentationId=PRESENTATION_ID,
                 body={"requests": delete_requests}
             ).execute()
 
-        # 🟢 omgekeerde volgorde: eerste blok als eerste slide
-        blocks = list(reversed(st.session_state["slides_data"]))
-
+        # Nieuwe slides bouwen
         requests = []
-        for blok in blocks:
+        for index, blok in enumerate(st.session_state["slides_data"]):
             slide_id = f"slide_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "duplicateObject": {
@@ -38,7 +85,7 @@ def upload_to_slides():
                 }
             })
 
-            # Bovenaan: datum in het midden en vetgedrukt
+            # ✅ Datum bovenaan gecentreerd en vet
             datum_id = f"datum_{uuid.uuid4().hex[:8]}"
             requests.append({
                 "createShape": {
@@ -80,16 +127,18 @@ def upload_to_slides():
                 }
             })
 
-            # Kolommen per groep
             x_offset = 50
             y_offset = 60
             column_width = 200
+
             for i, col in enumerate(blok["columns"]):
                 box_x = x_offset + i * (column_width + 40)
                 box_y = y_offset
+
                 content = f"**{col['tijd']}**\n**Juf: {col['juf']}**\n\n"
                 for kind, pony in col["kinderen"]:
-                    content += f"{kind} – {pony}\n"
+                    opm = pony_opmerking(pony)
+                    content += f"{kind} – {pony}{opm}\n"
 
                 textbox_id = f"textbox_{uuid.uuid4().hex[:8]}"
                 requests.append({
@@ -126,18 +175,14 @@ def upload_to_slides():
                         requests.append({
                             "updateTextStyle": {
                                 "objectId": textbox_id,
-                                "textRange": {
-                                    "type": "FIXED_RANGE",
-                                    "startIndex": index_start,
-                                    "endIndex": index_start + length
-                                },
+                                "textRange": {"type": "FIXED_RANGE", "startIndex": index_start, "endIndex": index_start + length},
                                 "style": element["textRun"]["style"],
                                 "fields": ",".join(element["textRun"]["style"].keys())
                             }
                         })
                     index_start += length
 
-            # Ondertekst onderaan
+            # ✅ Ondertekst onderaan gecentreerd
             if blok.get("ondertekst"):
                 onder_id = f"onder_{uuid.uuid4().hex[:8]}"
                 requests.append({
@@ -191,6 +236,7 @@ def upload_to_slides():
                     }
                 })
 
+        # Upload in juiste volgorde (eerste slide eerst)
         service.presentations().batchUpdate(
             presentationId=PRESENTATION_ID,
             body={"requests": requests}
