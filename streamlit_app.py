@@ -103,152 +103,143 @@ if uploaded_file:
     df = pd.read_excel(xls, sheet_name=sheet, header=None)
     st.dataframe(df.head(20))
 
-    ponynamen_kolom = None
-    ponynamen_start_index = 0
-    for col in df.columns:
-        telling, start_index = 0, None
-        for idx, value in df[col].dropna().astype(str).items():
-            if re.match(r"^[A-Za-z\- ]+$", value):
-                if telling == 0:
-                    start_index = idx
-                telling += 1
-                if telling >= 60:
-                    ponynamen_kolom = col
-                    ponynamen_start_index = start_index
-                    break
-            else:
-                telling = 0
-        if ponynamen_kolom is not None:
+    # Zoek de rij waar 'eigen pony' staat in kolom D
+    eigen_pony_rij = None
+    for i in range(2, len(df)):
+        cell = str(df.iloc[i, 3]).strip().lower()  # kolom D = index 3
+        if cell.startswith("eigen pony"):
+            eigen_pony_rij = i
             break
-
-    if ponynamen_kolom is not None:
-        tijd_pattern = re.compile(r"\b\d{1,2}:\d{2}(\s*[-–−]\s*\d{1,2}:\d{2})?\b")
-        tijdrij = next((i for i in range(0, 5) if any(tijd_pattern.search(str(cell)) for cell in df.iloc[i])), None)
-
-        if tijdrij is not None:
-            tijd_dict = {
-                col: str(df.iloc[tijdrij, col]).strip()
-                for col in df.columns
-                if tijd_pattern.match(str(df.iloc[tijdrij, col]))
-            }
-
-            tijd_items = sorted(
-                tijd_dict.items(),
-                key=lambda x: datetime.datetime.strptime(
-                    re.search(r"\d{1,2}:\d{2}", x[1]).group(), "%H:%M"
-                )
-            )
-
-            groepen_per_blok = []
-            huidige_blok = []
-            laatst_verwerkte_tijd = None
-
-            for col, tijd in tijd_items:
-                tijd_match = re.search(r"\d{1,2}:\d{2}", tijd)
-                if not tijd_match:
-                    continue
-                tijd_dt = datetime.datetime.strptime(tijd_match.group(), "%H:%M")
-
-                if laatst_verwerkte_tijd is None or (tijd_dt - laatst_verwerkte_tijd).total_seconds() > 30 * 60:
-                    if huidige_blok:
-                        groepen_per_blok.append(huidige_blok)
-                    huidige_blok = [(col, tijd)]
-                    laatst_verwerkte_tijd = tijd_dt
-                else:
-                    huidige_blok.append((col, tijd))
-
-            if huidige_blok:
-                groepen_per_blok.append(huidige_blok)
-
-            datum_vandaag = datetime.datetime.today().strftime("%d-%m-%Y")
-            eigen_pony_rijen = [
-                r for r in range(ponynamen_start_index, len(df))
-                if any("eigen pony" in str(df.iloc[r, c]).strip().lower() for c in df.columns)
-            ]
-            eigen_pony_rij = min(eigen_pony_rijen) if eigen_pony_rijen else None
-            max_rij = eigen_pony_rij if eigen_pony_rij else len(df)
-
-            reeds_in_bak = set()
-            slides_data = []
-
-            for blok in groepen_per_blok:
-                blok_kolommen = []
-                for col, tijd in blok:
-                    juf = str(df.iloc[eigen_pony_rij + 2, col]).strip().title() if eigen_pony_rij and pd.notna(df.iloc[eigen_pony_rij + 2, col]) else "Onbekend"
-                    kind_pony_combinaties = []
-                    namen_counter = {}
-
-                    for r in range(ponynamen_start_index, max_rij):
-                        naam = str(df.iloc[r, col])
-                        pony = str(df.iloc[r, ponynamen_kolom])
-                        if not naam.strip() or naam.strip().lower() in ["", "nan", "x"]:
-                            continue
-
-                        delen = naam.strip().split()
-                        voornaam = delen[0].capitalize() if delen else ""
-                        achternaam = ""
-                        tussenvoegsels = {"van", "de", "der", "den", "ter", "ten", "het", "te"}
-                        for deel in delen[1:]:
-                            if deel.lower() not in tussenvoegsels:
-                                achternaam = deel.capitalize()
-                                break
-                        code = voornaam
-                        key = voornaam.lower()
-                        if key in namen_counter:
-                            code += achternaam[:1].upper()
-                        namen_counter[key] = namen_counter.get(key, 0) + 1
-
-                        opmerking = ""
-                        for sleutel, tekst in st.session_state.pony_opmerkingen.items():
-                            if sleutel.lower() in pony.lower():
-                                opmerking = f" ({tekst})"
-                                break
-
-                        locatie = "(B)" if pony in reeds_in_bak else "(S)"
-                        pony_tekst = f"{pony.title()} {locatie}{opmerking}"
-                        kind_pony_combinaties.append((code, pony_tekst))
-                        reeds_in_bak.add(pony)
-
-                    kind_pony_combinaties.sort(key=lambda x: x[0].lower())
-                    blok_kolommen.append({
-                        "tijd": tijd,
-                        "juf": juf,
-                        "kinderen": kind_pony_combinaties
-                    })
-
-                for i in range(0, len(blok_kolommen), 3):
-                    slides_data.append({
-                        "title": f"Planning {datum_vandaag}",
-                        "columns": blok_kolommen[i:i + 3],
-                        "ondertekst": st.session_state.ondertekst.strip(),
-                        "vet": st.session_state.vet,
-                        "geel": st.session_state.geel
-                    })
-
-            st.session_state["slides_data"] = slides_data
-            st.success("Planning is verwerkt. Je kunt nu uploaden.")
-
-            if st.button("📄 Upload naar (online) scherm"):
-                upload_to_slides()
-
-            st.markdown("### 📋 Voorbeeld weergave van slides")
-            for idx, blok in enumerate(slides_data):
-                st.markdown(f"**Slide {idx + 1}: {blok['title']}**")
-                cols = st.columns(3)
-                for i, coldata in enumerate(blok["columns"]):
-                    with cols[i]:
-                        st.markdown(f"**{coldata['tijd']}**")
-                        st.markdown(f"**Juf: {coldata['juf']}**")
-                        for kind, pony in coldata["kinderen"]:
-                            st.markdown(f"{kind} – {pony}")
-                if blok.get("ondertekst"):
-                    stijl = "**" if blok.get("vet") else ""
-                    kleur = '<span style="color:gold">' if blok.get("geel") else ""
-                    einde = "</span>" if kleur else ""
-                    st.markdown(f"{kleur}{stijl}{blok['ondertekst']}{stijl}{einde}", unsafe_allow_html=True)
-        else:
-            st.warning("Kon geen rij met lestijden vinden.")
+        if cell.replace(" ", "").startswith("eigenpony"):
+            eigen_pony_rij = i
+            break
+    if eigen_pony_rij is None:
+        st.warning("Kon geen rij met 'eigen pony' vinden in kolom D.")
     else:
-        st.warning("Kon geen kolom met >60 ponynamen vinden.")
+        # Bepaal kolommen met tijden in rij 2 (index 1), vanaf kolom E (index 4)
+        tijd_kolommen = []
+        tijd_pattern = re.compile(r"\d{1,2}:\d{2}")
+        for col in range(4, df.shape[1]):
+            val = str(df.iloc[1, col]).strip()
+            if tijd_pattern.match(val):
+                tijd_kolommen.append(col)
+            else:
+                break  # Stop bij eerste lege/geen tijds-cel
+
+        ponynamen_kolom = 3  # kolom D
+        ponynamen_start_index = 2  # Rij 3 (index 2)
+        max_rij = eigen_pony_rij
+
+        groepen_per_blok = []
+        blok = []
+        laatst_verwerkte_tijd = None
+
+        tijd_dict = {}
+        for col in tijd_kolommen:
+            tijd = str(df.iloc[1, col]).strip()
+            tijd_dict[col] = tijd
+
+        tijd_items = sorted(
+            tijd_dict.items(),
+            key=lambda x: datetime.datetime.strptime(
+                re.search(r"\d{1,2}:\d{2}", x[1]).group(), "%H:%M"
+            )
+        )
+
+        for col, tijd in tijd_items:
+            tijd_match = re.search(r"\d{1,2}:\d{2}", tijd)
+            if not tijd_match:
+                continue
+            tijd_dt = datetime.datetime.strptime(tijd_match.group(), "%H:%M")
+            if laatst_verwerkte_tijd is None or (tijd_dt - laatst_verwerkte_tijd).total_seconds() > 30 * 60:
+                if blok:
+                    groepen_per_blok.append(blok)
+                blok = [(col, tijd)]
+                laatst_verwerkte_tijd = tijd_dt
+            else:
+                blok.append((col, tijd))
+        if blok:
+            groepen_per_blok.append(blok)
+
+        datum_vandaag = datetime.datetime.today().strftime("%d-%m-%Y")
+        slides_data = []
+        reeds_in_bak = set()
+
+        for blok in groepen_per_blok:
+            blok_kolommen = []
+            for col, tijd in blok:
+                # Juf staat altijd 2 rijen onder de rij van 'eigen pony'
+                juf_rij = eigen_pony_rij + 2
+                juf = str(df.iloc[juf_rij, col]).strip().title() if pd.notna(df.iloc[juf_rij, col]) else "Onbekend"
+                kind_pony_combinaties = []
+                namen_counter = {}
+
+                for r in range(ponynamen_start_index, max_rij):
+                    naam = str(df.iloc[r, col])
+                    pony = str(df.iloc[r, ponynamen_kolom])
+                    if not naam.strip() or naam.strip().lower() in ["", "nan", "x"]:
+                        continue
+                    delen = naam.strip().split()
+                    voornaam = delen[0].capitalize() if delen else ""
+                    achternaam = ""
+                    tussenvoegsels = {"van", "de", "der", "den", "ter", "ten", "het", "te"}
+                    for deel in delen[1:]:
+                        if deel.lower() not in tussenvoegsels:
+                            achternaam = deel.capitalize()
+                            break
+                    code = voornaam
+                    key = voornaam.lower()
+                    if key in namen_counter:
+                        code += achternaam[:1].upper()
+                    namen_counter[key] = namen_counter.get(key, 0) + 1
+
+                    opmerking = ""
+                    for sleutel, tekst in st.session_state.pony_opmerkingen.items():
+                        if sleutel.lower() in pony.lower():
+                            opmerking = f" ({tekst})"
+                            break
+
+                    locatie = "(B)" if pony in reeds_in_bak else "(S)"
+                    pony_tekst = f"{pony.title()} {locatie}{opmerking}"
+                    kind_pony_combinaties.append((code, pony_tekst))
+                    reeds_in_bak.add(pony)
+
+                kind_pony_combinaties.sort(key=lambda x: x[0].lower())
+                blok_kolommen.append({
+                    "tijd": tijd,
+                    "juf": juf,
+                    "kinderen": kind_pony_combinaties
+                })
+
+            for i in range(0, len(blok_kolommen), 3):
+                slides_data.append({
+                    "title": f"Planning {datum_vandaag}",
+                    "columns": blok_kolommen[i:i + 3],
+                    "ondertekst": st.session_state.ondertekst.strip(),
+                    "vet": st.session_state.vet,
+                    "geel": st.session_state.geel
+                })
+
+        st.session_state["slides_data"] = slides_data
+        st.success("Planning is verwerkt. Je kunt nu uploaden.")
+
+        if st.button("📄 Upload naar (online) scherm"):
+            upload_to_slides()
+
+        st.markdown("### 📋 Voorbeeld weergave van slides")
+        for idx, blok in enumerate(slides_data):
+            st.markdown(f"**Slide {idx + 1}: {blok['title']}**")
+            cols = st.columns(3)
+            for i, coldata in enumerate(blok["columns"]):
+                with cols[i]:
+                    st.markdown(f"**{coldata['tijd']}**")
+                    st.markdown(f"**Juf: {coldata['juf']}**")
+                    for kind, pony in coldata["kinderen"]:
+                        st.markdown(f"{kind} – {pony}")
+            if blok.get("ondertekst"):
+                stijl = "**" if blok.get("vet") else ""
+                kleur = '<span style="color:gold">' if blok.get("geel") else ""
+                einde = "</span>" if kleur else ""
+                st.markdown(f"{kleur}{stijl}{blok['ondertekst']}{stijl}{einde}", unsafe_allow_html=True)
 else:
     st.info("Upload eerst een Excel-bestand om verder te gaan.")
