@@ -44,7 +44,6 @@ if st.sidebar.checkbox("✏️ Pony-opmerkingen beheren"):
             if cols[1].button("🗑️", key=f"verwijder_{naam}"):
                 st.session_state.verwijder_sleutel = naam
 
-# Verwijder indien nodig
 if st.session_state.verwijder_sleutel:
     st.session_state.pony_opmerkingen.pop(st.session_state.verwijder_sleutel, None)
     with pony_opmerkingen_pad.open("w", encoding="utf-8") as f:
@@ -52,7 +51,7 @@ if st.session_state.verwijder_sleutel:
     st.session_state.verwijder_sleutel = None
     st.sidebar.success("Opmerking verwijderd!")
 
-# 👉 Basisinstellingen
+# 👉 Locale instellen
 try:
     locale.setlocale(locale.LC_TIME, 'nl_NL.UTF-8')
 except:
@@ -174,7 +173,17 @@ if uploaded_file:
             for blok in groepen_per_blok:
                 blok_kolommen = []
                 for col, tijd in blok:
-                    juf = str(df.iloc[eigen_pony_rij + 2, col]).strip().title() if eigen_pony_rij and pd.notna(df.iloc[eigen_pony_rij + 2, col]) else "Onbekend"
+                    juf = "Onbekend"
+                    if eigen_pony_rij:
+                        for offset in range(2, 8):
+                            rij_index = eigen_pony_rij + offset
+                            if rij_index >= len(df):
+                                break
+                            celwaarde = str(df.iloc[rij_index, col]).strip()
+                            if celwaarde and celwaarde.isalpha() and len(celwaarde) <= 20:
+                                juf = celwaarde.title()
+                                break
+
                     kind_pony_combinaties = []
                     namen_counter = {}
 
