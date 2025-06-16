@@ -173,16 +173,15 @@ if uploaded_file:
             for blok in groepen_per_blok:
                 blok_kolommen = []
                 for col, tijd in blok:
+                    # Verbeterde juf-herkenning (zoek in max. 8 rijen onder eigen_pony_rij)
                     juf = "Onbekend"
                     if eigen_pony_rij:
-                        for offset in range(2, 8):
-                            rij_index = eigen_pony_rij + offset
-                            if rij_index >= len(df):
-                                break
-                            celwaarde = str(df.iloc[rij_index, col]).strip()
-                            if celwaarde and celwaarde.isalpha() and len(celwaarde) <= 20:
-                                juf = celwaarde.title()
-                                break
+                        for offset in range(2, 10):
+                            if eigen_pony_rij + offset < len(df):
+                                cel = df.iloc[eigen_pony_rij + offset, col]
+                                if pd.notna(cel) and str(cel).strip():
+                                    juf = str(cel).strip().title()
+                                    break
 
                     kind_pony_combinaties = []
                     namen_counter = {}
