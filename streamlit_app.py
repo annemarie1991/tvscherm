@@ -35,7 +35,6 @@ if st.sidebar.checkbox("✏️ Pony-opmerkingen beheren"):
             with pony_opmerkingen_pad.open("w", encoding="utf-8") as f:
                 json.dump(st.session_state.pony_opmerkingen, f, ensure_ascii=False, indent=2)
             st.sidebar.success("Opmerking opgeslagen!")
-
     if st.session_state.pony_opmerkingen:
         st.sidebar.markdown("### 📋 Huidige opmerkingen")
         for naam, opm in st.session_state.pony_opmerkingen.items():
@@ -43,14 +42,13 @@ if st.sidebar.checkbox("✏️ Pony-opmerkingen beheren"):
             cols[0].markdown(f"- **{naam}**: {opm}")
             if cols[1].button("🗑️", key=f"verwijder_{naam}"):
                 st.session_state.verwijder_sleutel = naam
-
-# Verwijder indien nodig
-if st.session_state.verwijder_sleutel:
-    st.session_state.pony_opmerkingen.pop(st.session_state.verwijder_sleutel, None)
-    with pony_opmerkingen_pad.open("w", encoding="utf-8") as f:
-        json.dump(st.session_state.pony_opmerkingen, f, ensure_ascii=False, indent=2)
-    st.session_state.verwijder_sleutel = None
-    st.sidebar.success("Opmerking verwijderd!")
+    # Verwijder indien nodig
+    if st.session_state.verwijder_sleutel:
+        st.session_state.pony_opmerkingen.pop(st.session_state.verwijder_sleutel, None)
+        with pony_opmerkingen_pad.open("w", encoding="utf-8") as f:
+            json.dump(st.session_state.pony_opmerkingen, f, ensure_ascii=False, indent=2)
+        st.session_state.verwijder_sleutel = None
+        st.sidebar.success("Opmerking verwijderd!")
 
 # 👉 Basisinstellingen
 try:
@@ -96,7 +94,6 @@ if st.sidebar.button("📂 Opslaan"):
 st.markdown("Upload hieronder het Excel-bestand met de planning. Kies daarna het juiste tabblad.")
 
 uploaded_file = st.file_uploader("📄 Upload je Excel-bestand", type=["xlsx"])
-
 if uploaded_file:
     xls = pd.ExcelFile(uploaded_file)
     sheet = st.selectbox("📘 Kies een tabblad", xls.sheet_names)
@@ -106,13 +103,14 @@ if uploaded_file:
     # Zoek de rij waar 'eigen pony' staat in kolom D
     eigen_pony_rij = None
     for i in range(2, len(df)):
-        cell = str(df.iloc[i, 3]).strip().lower()  # kolom D = index 3
+        cell = str(df.iloc[i, 3]).strip().lower() # kolom D = index 3
         if cell.startswith("eigen pony"):
             eigen_pony_rij = i
             break
         if cell.replace(" ", "").startswith("eigenpony"):
             eigen_pony_rij = i
             break
+
     if eigen_pony_rij is None:
         st.warning("Kon geen rij met 'eigen pony' vinden in kolom D.")
     else:
@@ -124,28 +122,25 @@ if uploaded_file:
             if tijd_pattern.match(val):
                 tijd_kolommen.append(col)
             else:
-                break  # Stop bij eerste lege/geen tijds-cel
+                break # Stop bij eerste lege/geen tijds-cel
 
-        ponynamen_kolom = 3  # kolom D
-        ponynamen_start_index = 2  # Rij 3 (index 2)
+        ponynamen_kolom = 3 # kolom D
+        ponynamen_start_index = 2 # Rij 3 (index 2)
         max_rij = eigen_pony_rij
 
         groepen_per_blok = []
         blok = []
         laatst_verwerkte_tijd = None
-
         tijd_dict = {}
         for col in tijd_kolommen:
             tijd = str(df.iloc[1, col]).strip()
             tijd_dict[col] = tijd
-
         tijd_items = sorted(
             tijd_dict.items(),
             key=lambda x: datetime.datetime.strptime(
                 re.search(r"\d{1,2}:\d{2}", x[1]).group(), "%H:%M"
             )
         )
-
         for col, tijd in tijd_items:
             tijd_match = re.search(r"\d{1,2}:\d{2}", tijd)
             if not tijd_match:
@@ -163,7 +158,9 @@ if uploaded_file:
 
         datum_vandaag = datetime.datetime.today().strftime("%d-%m-%Y")
         slides_data = []
-        reeds_in_bak = set()
+
+        # --- S/B-logica met 10-minutenregel ---
+        pony_last_end = {}
 
         for blok in groepen_per_blok:
             blok_kolommen = []
@@ -173,7 +170,6 @@ if uploaded_file:
                 juf = str(df.iloc[juf_rij, col]).strip().title() if pd.notna(df.iloc[juf_rij, col]) else "Onbekend"
                 kind_pony_combinaties = []
                 namen_counter = {}
-
                 for r in range(ponynamen_start_index, max_rij):
                     naam = str(df.iloc[r, col])
                     pony = str(df.iloc[r, ponynamen_kolom])
@@ -199,18 +195,32 @@ if uploaded_file:
                             opmerking = f" ({tekst})"
                             break
 
-                    locatie = "(B)" if pony in reeds_in_bak else "(S)"
+                    # --- Hier de aangepaste S/B-logica ---
+                    starttijd_match = re.search(r"\d{1,2}:\d{2}", tijd)
+                    if starttijd_match:
+                        starttijd_dt = datetime.datetime.strptime(starttijd_match.group(), "%H:%M")
+                        eindtijd_dt = starttijd_dt + datetime.timedelta(minutes=30)  # Pas aan als lesduur anders is
+                    else:
+                        starttijd_dt = None
+                        eindtijd_dt = None
+
+                    in_bak = False
+                    if pony in pony_last_end and starttijd_dt:
+                        tijdverschil = (starttijd_dt - pony_last_end[pony]).total_seconds()
+                        if 0 < tijdverschil <= 600:
+                            in_bak = True
+                    locatie = "(B)" if in_bak else "(S)"
+                    pony_last_end[pony] = eindtijd_dt
+                    # --- einde S/B-logica ---
+
                     pony_tekst = f"{pony.title()} {locatie}{opmerking}"
                     kind_pony_combinaties.append((code, pony_tekst))
-                    reeds_in_bak.add(pony)
-
                 kind_pony_combinaties.sort(key=lambda x: x[0].lower())
                 blok_kolommen.append({
                     "tijd": tijd,
                     "juf": juf,
                     "kinderen": kind_pony_combinaties
                 })
-
             for i in range(0, len(blok_kolommen), 3):
                 slides_data.append({
                     "title": f"Planning {datum_vandaag}",
@@ -219,7 +229,6 @@ if uploaded_file:
                     "vet": st.session_state.vet,
                     "geel": st.session_state.geel
                 })
-
         st.session_state["slides_data"] = slides_data
         st.success("Planning is verwerkt. Je kunt nu uploaden.")
 
@@ -238,8 +247,8 @@ if uploaded_file:
                         st.markdown(f"{kind} – {pony}")
             if blok.get("ondertekst"):
                 stijl = "**" if blok.get("vet") else ""
-                kleur = '<span style="color:gold">' if blok.get("geel") else ""
-                einde = "</span>" if kleur else ""
+                kleur = '' if blok.get("geel") else ""
+                einde = "" if kleur else ""
                 st.markdown(f"{kleur}{stijl}{blok['ondertekst']}{stijl}{einde}", unsafe_allow_html=True)
 else:
     st.info("Upload eerst een Excel-bestand om verder te gaan.")
