@@ -3,7 +3,6 @@ import pandas as pd
 import datetime
 import re
 import locale
-from pathlib import Path
 from slides_uploader import upload_to_slides
 from opmerkingen_sheet import SHEET_LINK, lees_opmerkingen
 
@@ -57,29 +56,6 @@ with col2:
     st.link_button("🌐 Bekijk online", "https://www.hetzesspan.nl/tv")
 
 st.title("🏄 Het Zesspan TV Scherm")
-
-tekstpad = Path("ondertekst.txt")
-if "ondertekst" not in st.session_state:
-    if tekstpad.exists():
-        regels = tekstpad.read_text(encoding="utf-8").split("\n")
-        st.session_state.ondertekst = regels[0] if regels else ""
-        st.session_state.vet = regels[1] == "True" if len(regels) > 1 else False
-        st.session_state.geel = regels[2] == "True" if len(regels) > 2 else False
-    else:
-        st.session_state.ondertekst = ""
-        st.session_state.vet = False
-        st.session_state.geel = False
-
-st.sidebar.header("📜 Ondertekst instellen")
-nieuwe_tekst = st.sidebar.text_area("Tekst onderaan elke sectie", st.session_state.ondertekst or "")
-vet = st.sidebar.checkbox("Dikgedrukt", value=st.session_state.vet)
-geel = st.sidebar.checkbox("Geel markeren", value=st.session_state.geel)
-if st.sidebar.button("📂 Opslaan"):
-    st.session_state.ondertekst = nieuwe_tekst
-    st.session_state.vet = vet
-    st.session_state.geel = geel
-    tekstpad.write_text(f"{nieuwe_tekst}\n{vet}\n{geel}", encoding="utf-8")
-    st.sidebar.success("Tekst opgeslagen!")
 
 st.markdown("Upload hieronder het Excel-bestand met de planning. Kies daarna het juiste tabblad.")
 
@@ -223,9 +199,6 @@ if uploaded_file:
                 slides_data.append({
                     "title": f"Planning {datum_vandaag}",
                     "columns": blok_kolommen[i:i + 3],
-                    "ondertekst": st.session_state.ondertekst.strip(),
-                    "vet": st.session_state.vet,
-                    "geel": st.session_state.geel
                 })
         st.session_state["slides_data"] = slides_data
         st.success("Planning is verwerkt. Je kunt nu uploaden.")
@@ -243,10 +216,5 @@ if uploaded_file:
                     st.markdown(f"**Juf: {coldata['juf']}**")
                     for kind, pony in coldata["kinderen"]:
                         st.markdown(f"{kind} – {pony}")
-            if blok.get("ondertekst"):
-                stijl = "**" if blok.get("vet") else ""
-                kleur = '' if blok.get("geel") else ""
-                einde = "" if kleur else ""
-                st.markdown(f"{kleur}{stijl}{blok['ondertekst']}{stijl}{einde}", unsafe_allow_html=True)
 else:
     st.info("Upload eerst een Excel-bestand om verder te gaan.")
