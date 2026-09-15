@@ -5,50 +5,40 @@ import re
 import locale
 from pathlib import Path
 from slides_uploader import upload_to_slides
-import json
+from opmerkingen_sheet import SHEET_LINK, lees_opmerkingen
 
 st.set_page_config(page_title="Het Zesspan TV Scherm", layout="wide")
 
-# 👉 Pony-opmerkingen initialiseren
-pony_opmerkingen_pad = Path("pony_opmerkingen.json")
-if "pony_opmerkingen" not in st.session_state:
-    try:
-        if pony_opmerkingen_pad.exists():
-            with pony_opmerkingen_pad.open("r", encoding="utf-8") as f:
-                st.session_state.pony_opmerkingen = json.load(f)
-        else:
-            st.session_state.pony_opmerkingen = {}
-    except Exception:
-        st.session_state.pony_opmerkingen = {}
+# 👉 Pony-opmerkingen komen uit de Google Sheet, zodat een herstart ze niet wist.
+@st.cache_data(ttl=300)
+def pony_opmerkingen_uit_sheet():
+    return lees_opmerkingen()
 
-if "verwijder_sleutel" not in st.session_state:
-    st.session_state.verwijder_sleutel = None
+try:
+    st.session_state.pony_opmerkingen = pony_opmerkingen_uit_sheet()
+    sheet_fout = None
+except Exception as fout:
+    st.session_state.pony_opmerkingen = {}
+    sheet_fout = fout
 
-# 👉 Pony-opmerkingen beheren in de zijbalk
+# 👉 Pony-opmerkingen bekijken in de zijbalk
 if st.sidebar.checkbox("✏️ Pony-opmerkingen beheren"):
-    st.sidebar.markdown("Voeg hier opmerkingen toe aan pony's. Opmerkingen worden getoond in de planning.")
-    nieuwe_pony = st.sidebar.text_input("Pony-naam (of deel van naam)")
-    nieuwe_opmerking = st.sidebar.text_input("Opmerking bij deze pony")
-    if st.sidebar.button("➕ Opslaan/aanpassen"):
-        if nieuwe_pony.strip():
-            st.session_state.pony_opmerkingen[nieuwe_pony.strip()] = nieuwe_opmerking.strip()
-            with pony_opmerkingen_pad.open("w", encoding="utf-8") as f:
-                json.dump(st.session_state.pony_opmerkingen, f, ensure_ascii=False, indent=2)
-            st.sidebar.success("Opmerking opgeslagen!")
+    if sheet_fout:
+        st.sidebar.error(f"De opmerkingen konden niet worden opgehaald: {sheet_fout}")
     if st.session_state.pony_opmerkingen:
         st.sidebar.markdown("### 📋 Huidige opmerkingen")
         for naam, opm in st.session_state.pony_opmerkingen.items():
-            cols = st.sidebar.columns([4, 1])
-            cols[0].markdown(f"- **{naam}**: {opm}")
-            if cols[1].button("🗑️", key=f"verwijder_{naam}"):
-                st.session_state.verwijder_sleutel = naam
-    # Verwijder indien nodig
-    if st.session_state.verwijder_sleutel:
-        st.session_state.pony_opmerkingen.pop(st.session_state.verwijder_sleutel, None)
-        with pony_opmerkingen_pad.open("w", encoding="utf-8") as f:
-            json.dump(st.session_state.pony_opmerkingen, f, ensure_ascii=False, indent=2)
-        st.session_state.verwijder_sleutel = None
-        st.sidebar.success("Opmerking verwijderd!")
+            st.sidebar.markdown(f"- **{naam}**: {opm}")
+    # Hier kan niets getypt worden. Zeg dat duidelijk, anders denkt een
+    # collega dat een aanpassing hier wel werkt.
+    st.sidebar.warning(
+        "Hier kun je niets aanpassen. Opmerkingen toevoegen, veranderen of weghalen "
+        f"kan alleen in de Google Sheet: [TV-scherm opmerkingen]({SHEET_LINK})")
+    st.sidebar.caption("Aangepast in de sheet? Het scherm neemt het binnen 5 minuten over, "
+                       "of klik op Opnieuw ophalen.")
+    if st.sidebar.button("🔄 Opnieuw ophalen"):
+        pony_opmerkingen_uit_sheet.clear()
+        st.rerun()
 
 # 👉 Basisinstellingen
 try:
@@ -196,18 +186,26 @@ if uploaded_file:
                             break
 
                     # --- Hier de aangepaste S/B-logica ---
-                    starttijd_match = re.search(r"\d{1,2}:\d{2}", tijd)
-                    if starttijd_match:
-                        starttijd_dt = datetime.datetime.strptime(starttijd_match.group(), "%H:%M")
-                        eindtijd_dt = starttijd_dt + datetime.timedelta(minutes=30)  # Pas aan als lesduur anders is
+                    # De eindtijd komt uit de kop ("16:50 - 17:30"). Staat er
+                    # alleen een begintijd, dan rekenen we met 40 minuten (de
+                    # gewone lesduur in de planning).
+                    tijden = re.findall(r"\d{1,2}:\d{2}", tijd)
+                    if tijden:
+                        starttijd_dt = datetime.datetime.strptime(tijden[0], "%H:%M")
+                        if len(tijden) > 1:
+                            eindtijd_dt = datetime.datetime.strptime(tijden[1], "%H:%M")
+                        else:
+                            eindtijd_dt = starttijd_dt + datetime.timedelta(minutes=40)
                     else:
                         starttijd_dt = None
                         eindtijd_dt = None
 
+                    # Hooguit 10 minuten tussen het eind van de vorige les en het
+                    # begin van deze: dan staat de pony nog in de bak (ook bij 0).
                     in_bak = False
-                    if pony in pony_last_end and starttijd_dt:
+                    if pony_last_end.get(pony) and starttijd_dt:
                         tijdverschil = (starttijd_dt - pony_last_end[pony]).total_seconds()
-                        if 0 < tijdverschil <= 600:
+                        if 0 <= tijdverschil <= 600:
                             in_bak = True
                     locatie = "(B)" if in_bak else "(S)"
                     pony_last_end[pony] = eindtijd_dt
