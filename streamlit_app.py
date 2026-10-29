@@ -3,7 +3,7 @@ import pandas as pd
 import datetime
 import re
 import locale
-from slides_uploader import upload_to_slides
+from slides_uploader import upload_to_slides, aanspreekvorm
 from opmerkingen_sheet import SHEET_LINK, lees_opmerkingen
 
 st.set_page_config(page_title="Het Zesspan TV Scherm", layout="wide")
@@ -213,7 +213,7 @@ if uploaded_file:
             for i, coldata in enumerate(blok["columns"]):
                 with cols[i]:
                     st.markdown(f"**{coldata['tijd']}**")
-                    st.markdown(f"**Juf: {coldata['juf']}**")
+                    st.markdown(f"**{aanspreekvorm(coldata['juf'])}: {coldata['juf']}**")
                     for kind, pony in coldata["kinderen"]:
                         st.markdown(f"{kind} – {pony}")
 else:

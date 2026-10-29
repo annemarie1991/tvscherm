@@ -49,6 +49,15 @@ def pony_opmerking(pony_naam: str) -> str:
         pass
     return ""
 
+# 👉 Deze voornamen krijgen "Meester" in plaats van "Juf". Kleine letters.
+MEESTERS = {"dion"}
+
+def aanspreekvorm(naam: str) -> str:
+    delen = naam.split()
+    if delen and delen[0].lower() in MEESTERS:
+        return "Meester"
+    return "Juf"
+
 def upload_to_slides():
     if "slides_data" not in st.session_state or not st.session_state["slides_data"]:
         st.error("Geen slides om te uploaden.")
@@ -138,7 +147,7 @@ def upload_to_slides():
                 box_x = x_offset + i * (column_width + 40)
                 box_y = y_offset
 
-                content = f"**{col['tijd']}**\n**Juf: {col['juf']}**\n\n"
+                content = f"**{col['tijd']}**\n**{aanspreekvorm(col['juf'])}: {col['juf']}**\n\n"
                 for kind, pony in col["kinderen"]:
                     opm = pony_opmerking(pony)
                     content += f"{kind} – {pony}{opm}\n"
