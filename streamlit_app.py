@@ -4,21 +4,31 @@ import datetime
 import re
 import locale
 from slides_uploader import upload_to_slides, aanspreekvorm
-from opmerkingen_sheet import SHEET_LINK, lees_opmerkingen
+from opmerkingen_sheet import (ALLE, SHEET_LINK, lees_alles, niveau_en_bak_rij, springt_hier,
+                               zoek_opmerking)
 
 st.set_page_config(page_title="Het Zesspan TV Scherm", layout="wide")
 
 # 👉 Pony-opmerkingen komen uit de Google Sheet, zodat een herstart ze niet wist.
+# Ook het springrijtje (kolom G-I) en het vakje "Springen in bak" komen uit de sheet.
 @st.cache_data(ttl=300)
 def pony_opmerkingen_uit_sheet():
-    return lees_opmerkingen()
+    return lees_alles()
 
 try:
-    st.session_state.pony_opmerkingen = pony_opmerkingen_uit_sheet()
+    uit_sheet = pony_opmerkingen_uit_sheet()
     sheet_fout = None
 except Exception as fout:
-    st.session_state.pony_opmerkingen = {}
+    uit_sheet = {"gewoon": {}, "springen": {}, "springbakken": None, "springvakje": ""}
     sheet_fout = fout
+st.session_state.pony_opmerkingen = uit_sheet["gewoon"]
+springbakken = uit_sheet["springbakken"]
+if springbakken == ALLE:
+    spring_uitleg = "in alle lessen"
+elif springbakken:
+    spring_uitleg = "in bak " + " en ".join(str(b) for b in sorted(springbakken))
+else:
+    spring_uitleg = ""
 
 # 👉 Pony-opmerkingen bekijken in de zijbalk
 if st.sidebar.checkbox("✏️ Pony-opmerkingen beheren"):
@@ -28,6 +38,12 @@ if st.sidebar.checkbox("✏️ Pony-opmerkingen beheren"):
         st.sidebar.markdown("### 📋 Huidige opmerkingen")
         for naam, opm in st.session_state.pony_opmerkingen.items():
             st.sidebar.markdown(f"- **{naam}**: {opm}")
+    if spring_uitleg:
+        st.sidebar.markdown(f"### 🐴 Springen {spring_uitleg}")
+        st.sidebar.markdown("Daar gelden de opmerkingen uit het rijtje 'Als we gaan springen'.")
+    elif uit_sheet["springvakje"]:
+        st.sidebar.error(f"Het vakje 'Springen in bak' snap ik niet: "
+                         f"'{uit_sheet['springvakje']}'. Zet er bijvoorbeeld 1+2 of alle in.")
     # Hier kan niets getypt worden. Zeg dat duidelijk, anders denkt een
     # collega dat een aanpassing hier wel werkt.
     st.sidebar.warning(
@@ -80,6 +96,16 @@ if uploaded_file:
     if eigen_pony_rij is None:
         st.warning("Kon geen rij met 'eigen pony' vinden in kolom D.")
     else:
+        # De rijen "Niveau" en "Bak" onder het rooster: wat voor les het is
+        # (een springles krijgt altijd het springrijtje) en in welke bak.
+        niveau_rij, bak_rij = niveau_en_bak_rij(
+            [df.iloc[i, 3] for i in range(len(df))], eigen_pony_rij)
+        if spring_uitleg:
+            st.info(f"🐴 Deze week springen {spring_uitleg}: daar gelden de opmerkingen "
+                    "uit het rijtje 'Als we gaan springen'.")
+            if bak_rij is None and springbakken != ALLE:
+                st.warning("In deze daglijst staat geen rij 'Bak'. Daarom geldt bij alle "
+                           "lessen het springrijtje.")
         # Bepaal kolommen met tijden in rij 2 (index 1), vanaf kolom E (index 4)
         tijd_kolommen = []
         tijd_pattern = re.compile(r"\d{1,2}:\d{2}")
@@ -134,6 +160,12 @@ if uploaded_file:
                 # Juf staat altijd 2 rijen onder de rij van 'eigen pony'
                 juf_rij = eigen_pony_rij + 2
                 juf = str(df.iloc[juf_rij, col]).strip().title() if pd.notna(df.iloc[juf_rij, col]) else "Onbekend"
+                bak_cel = df.iloc[bak_rij, col] if bak_rij is not None else None
+                niveau_cel = df.iloc[niveau_rij, col] if niveau_rij is not None else None
+                if springt_hier(bak_cel, springbakken, niveau_cel):
+                    opmerkingen_les = uit_sheet["springen"]
+                else:
+                    opmerkingen_les = st.session_state.pony_opmerkingen
                 kind_pony_combinaties = []
                 namen_counter = {}
                 for r in range(ponynamen_start_index, max_rij):
@@ -155,11 +187,8 @@ if uploaded_file:
                         code += achternaam[:1].upper()
                     namen_counter[key] = namen_counter.get(key, 0) + 1
 
-                    opmerking = ""
-                    for sleutel, tekst in st.session_state.pony_opmerkingen.items():
-                        if sleutel.lower() in pony.lower():
-                            opmerking = f" ({tekst})"
-                            break
+                    tekst = zoek_opmerking(pony, opmerkingen_les)
+                    opmerking = f" ({tekst})" if tekst else ""
 
                     # --- Hier de aangepaste S/B-logica ---
                     # De eindtijd komt uit de kop ("16:50 - 17:30"). Staat er
